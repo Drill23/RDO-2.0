@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador de Rendimento Otimizado</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.min.js"></script>
+    <style>
+        /* Define color palette using CSS variables */
+        :root {
+            --primary-bg: #f4f7f6;
+            --secondary-bg: #ffffff;
+            --header-bg: #e9ecef;
+            --table-header-bg: #dee2e6;
+            --button-blue: #007bff;
+            --button-blue-hover: #0056b3;
+            --button-green: #28a745;
+            --button-green-hover: #1e7e34;
+            --button-yellow: #ffc107;
+            --button-yellow-hover: #d39e00;
+            --button-purple: #6f42c1;
+            --button-purple-hover: #5a32a3;
+            --button-purple-light: #9d78db; /* For Semanal T1 */
+            --button-purple-light-hover: #8a5fcf;
+            --button-purple-dark: #4d2d8a; /* For Semanal T2 */
+            --button-purple-dark-hover: #3e2177;
+            --button-blue-dark: #0d6efd; /* Exemplo para Mensal T1 */
+            --button-blue-dark-hover: #0b5ed7;
+            --button-green-dark: #198754; /* Exemplo para Mensal T2 */
+            --button-green-dark-hover: #157347;
+            --button-orange: #fd7e14; /* Exemplo para Comparar Mês */
+            --button-orange-hover: #d96a0d;
+            --button-grey: #6c757d;
+            --button-grey-hover: #545b62;
+            --button-red: #dc3545; /* PDF Export */
+            --button-red-hover: #bd2130;
+            --text-color: #333;
+            --positive: #28a745; /* Green */
+            --negative: #dc3545; /* Red */
+            --border-color: #dee2e6;
+            --na-meta: #6c757d; /* Grey for 'Na Meta' or neutral */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--primary-bg);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1350px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: var(--secondary-bg);
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--button-blue);
+            margin-bottom: 30px;
+            page-break-after: avoid;
+        }
+
+        .menu, .acoes {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .menu-section {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+         .menu-section:last-child {
+             border-bottom: none;
+             margin-bottom: 0;
+             padding-bottom: 0;
+         }
+         .menu-section h3 {
+            margin-bottom: 10px;
+            color: var(--button-grey);
+            font-size: 1.1em;
+            font-weight: 600;
+         }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 15px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            transition: background-color 0.3s ease;
+            vertical-align: middle;
+        }
+        button:hover { opacity: 0.9; }
+
+        /* Button Styles */
+        .btn-turno1 { background-color: var(--button-blue); }
+        .btn-turno1:hover { background-color: var(--button-blue-hover); }
+        .btn-turno2 { background-color: var(--button-green); }
+        .btn-turno2:hover { background-color: var(--button-green-hover); }
+        .btn-comparar-dia { background-color: var(--button-yellow); color: #333; }
+        .btn-comparar-dia:hover { background-color: var(--button-yellow-hover); }
+        .btn-semanal-t1 { background-color: var(--button-purple-light); }
+        .btn-semanal-t1:hover { background-color: var(--button-purple-light-hover); }
+        .btn-semanal-t2 { background-color: var(--button-purple-dark); }
+        .btn-semanal-t2:hover { background-color: var(--button-purple-dark-hover); }
+        .btn-comparar-semana { background-color: var(--button-purple); }
+        .btn-comparar-semana:hover { background-color: var(--button-purple-hover); }
+        .btn-mensal-t1 { background-color: var(--button-blue-dark); }
+        .btn-mensal-t1:hover { background-color: var(--button-blue-dark-hover); }
+        .btn-mensal-t2 { background-color: var(--button-green-dark); }
+        .btn-mensal-t2:hover { background-color: var(--button-green-dark-hover); }
+        .btn-comparar-mes { background-color: var(--button-orange); }
+        .btn-comparar-mes:hover { background-color: var(--button-orange-hover); }
+        .btn-pdf { background-color: var(--button-red); }
+        .btn-pdf:hover { background-color: var(--button-red-hover); }
+        .btn-voltar { background-color: var(--button-grey); }
+        .btn-voltar:hover { background-color: var(--button-grey-hover); }
+
+        #seletorPeriodo {
+             text-align: center;
+             margin-bottom: 20px;
+             padding: 15px;
+             background-color: var(--header-bg);
+             border-radius: 5px;
+        }
+        #seletorPeriodo label {
+            margin: 0 10px 0 5px;
+            font-weight: 500;
+        }
+        #seletorPeriodo input[type="date"], #seletorPeriodo select {
+             padding: 8px;
+             margin-right: 10px;
+             border: 1px solid var(--border-color);
+             border-radius: 4px;
+             font-size: 0.95em;
+        }
+        #seletorPeriodo button {
+             padding: 8px 15px;
+             font-size: 0.95em;
+             margin-left: 5px;
+        }
+
+        .info {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: var(--header-bg);
+            border-radius: 5px;
+            text-align: center;
+            page-break-after: avoid;
+        }
+
+        #status {
+            text-align: center;
+            font-style: italic;
+            color: var(--button-grey);
+            margin: 20px;
+        }
+
+        .content-area {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            margin-top: 20px;
+            position: relative;
+            /* page-break-inside: avoid; */ /* Might be too restrictive */
+        }
+
+        table {
+            margin: 20px auto;
+            border-collapse: collapse;
+            width: 100%;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+            overflow: hidden;
+            font-size: 0.9em;
+            border-spacing: 0;
+            page-break-inside: auto;
+        }
+        tr { page-break-inside: avoid !important; page-break-after: auto; }
+        thead { display: table-header-group; }
+        tbody { display: table-row-group; }
+
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 8px 10px;
+            text-align: left;
+            vertical-align: middle;
+        }
+        th {
+            background-color: var(--table-header-bg);
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.8em;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
+        }
+        td:last-child, th:last-child { text-align: center; }
+        td.numeric, th.numeric { text-align: right; white-space: nowrap; }
+        td.center, th.center { text-align: center; }
+
+        .positivo { color: var(--positive); font-weight: bold; }
+        .negativo { color: var(--negative); font-weight: bold; }
+        .na-meta { color: var(--na-meta); }
+
+        .summary {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #eef;
+            border-left: 5px solid var(--button-blue);
+            border-radius: 4px;
+            font-size: 1.1em;
+            page-break-before: auto;
+            page-break-inside: avoid !important;
+        }
+         .summary strong { color: var(--button-blue); }
+
+        .chart-container {
+             position: relative;
+             margin: auto;
+             margin-top: 30px;
+             height: 40vh;
+             width: 95%;
+             background: #fff;
+             padding: 15px;
+             border-radius: 5px;
+             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+             display: block !important;
+             page-break-inside: avoid !important;
+             page-break-before: auto;
+             overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            width: auto !important;
+            height: auto !important;
+        }
+
+        .acoes-visao {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+            page-break-before: avoid;
+        }
+
+        /* Styles specifically for PDF generation */
+        @media print {
+           body {
+               -webkit-print-color-adjust: exact !important;
+               color-adjust: exact !important;
+               font-size: 9pt;
+           }
+           .container { box-shadow: none; border: none; margin: 0; max-width: 100%; }
+           button, .menu, .acoes, #seletorPeriodo { display: none !important; } /* Hide selectors too */
+           .content-area { box-shadow: none; border: none; padding: 0; margin: 0; }
+           .chart-container { height: 35vh; width: 100%; padding: 5px; }
+           .chart-container, .summary, tr { page-break-inside: avoid !important; }
+           h1, .info { page-break-after: avoid; }
+           .acoes-visao { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Visualizador de Rendimento Otimizado</h1>
+
+        <div class="menu">
+             <div class="menu-section">
+                <h3>Análise Diária</h3>
+                <button class="btn-turno1" onclick="selecionarPeriodo('diario1')">🔵 Diário T1</button>
+                <button class="btn-turno2" onclick="selecionarPeriodo('diario2')">🟢 Diário T2</button>
+                <button class="btn-comparar-dia" onclick="selecionarPeriodo('comparar_dia')">🟡 Comparar Dia</button>
+            </div>
+            <div class="menu-section">
+                <h3>Análise Semanal</h3>
+                <button class="btn-semanal-t1" onclick="selecionarPeriodo('semanal1')">🟣 Semanal T1</button>
+                <button class="btn-semanal-t2" onclick="selecionarPeriodo('semanal2')">🟣 Semanal T2</button>
+                <button class="btn-comparar-semana" onclick="selecionarPeriodo('comparar_semana')">🟣 Comparar Semana</button>
+            </div>
+            <div class="menu-section">
+                <h3>Análise Mensal</h3>
+                <button class="btn-mensal-t1" onclick="selecionarPeriodo('mensal1')">🟦 Mensal T1</button>
+                <button class="btn-mensal-t2" onclick="selecionarPeriodo('mensal2')">🟩 Mensal T2</button>
+                <button class="btn-comparar-mes" onclick="selecionarPeriodo('comparar_mes')">🟧 Comparar Mês</button>
+            </div>
+        </div>
+
+        <!-- Área de Seleção de Período (Inicialmente Oculta) -->
+        <div id="seletorPeriodo" style="display:none;">
+             <h4>Selecione o Período para <span id="tipoAnaliseSelecionada">Análise</span>:</h4>
+             <div id="seletorData" style="display:none;">
+                 <label for="inputData">Data:</label>
+                 <input type="date" id="inputData" name="inputData">
+             </div>
+             <div id="seletorSemana" style="display:none;">
+                 <label for="selectSemana">Semana:</label>
+                 <select id="selectSemana">
+                     <option value="">Carregando...</option>
+                 </select>
+             </div>
+             <div id="seletorMes" style="display:none;">
+                 <label for="selectAnoMes">Ano:</label>
+                 <select id="selectAnoMes">
+                      <option value="">Carregando...</option>
+                 </select>
+                 <label for="selectMes">Mês:</label>
+                 <select id="selectMes">
+                     <option value="">Selecione o Ano</option>
+                 </select>
+             </div>
+             <button class="btn-turno1" onclick="carregarDadosSelecionados()">Carregar Dados</button>
+             <button class="btn-voltar" onclick="cancelarSelecao()">Cancelar</button>
+        </div>
+
+        <div id="info" class="info" style="display:none;"></div>
+        <div id="status">⏳ Carregando manifesto de arquivos...</div>
+        <div class="acoes">
+             <button class="btn-voltar voltar" onclick="voltarMenu()" style="display:none;">🔙 Voltar ao Menu Principal</button>
+        </div>
+
+        <div class="content-area" id="contentArea" style="display:none;">
+            <!-- Info Title (prepended by JS for PDF) -->
+            <div id="resultado"></div> <!-- Table and Summary here -->
+
+            <!-- Chart Containers -->
+            <div id="graficoIndividualContainer" class="chart-container" style="display:none;">
+                 <canvas id="graficoIndividual"></canvas>
+            </div>
+            <div id="graficoComparativoContainer" class="chart-container" style="display:none;">
+                 <canvas id="graficoComparativo"></canvas>
+            </div>
+
+             <!-- Actions specific to the current view -->
+             <div class="acoes-visao">
+                 <button class="btn-pdf btn-pdf-visao" onclick="exportarPDF_VisaoAtual()" style="display:none;">📄 Exportar Esta Visão em PDF</button>
+             </div>
+        </div>
+
+    </div>
+
+<script>
+    let dados = {}; // Armazena dados carregados para a visão ATUAL
+    let arquivosDisponiveis = []; // Lista de TODOS os nomes de arquivos do index.json
+    let tipoAnaliseAtual = null; // Guarda o tipo de análise selecionado (ex: 'diario1', 'comparar_semana')
+    let graficoComparativoInstancia = null;
+    let graficoIndividualInstancia = null;
+    let currentChartType = ''; // Helper for PDF export context
+
+
+    // --- Funções Utilitárias ---
+    function destruirGraficos() {
+        //console.log("Tentando destruir gráficos...");
+        if (graficoComparativoInstancia) { graficoComparativoInstancia.destroy(); graficoComparativoInstancia = null; /*console.log("Gráfico comparativo destruído.");*/ }
+        if (graficoIndividualInstancia) { graficoIndividualInstancia.destroy(); graficoIndividualInstancia = null; /*console.log("Gráfico individual destruído.");*/ }
+        document.getElementById("graficoComparativoContainer").style.display = "none";
+        document.getElementById("graficoIndividualContainer").style.display = "none";
+    }
+
+    function extrairInfo(nomeArquivo) {
+        // Padroniza a extração de informações do nome do arquivo
+        if (!nomeArquivo) return { nome: 'N/A', tipo: 'N/A', diaSemana: 'N/A', data: 'N/A', turno: 'N/A', mes: 'N/A', ano: 'N/A', tituloPeriodo: 'N/A' };
+        const partes = nomeArquivo.replace('.json', '').split('.');
+        let tipo = 'N/A', turno = 'N/A', diaSemana = 'N/A', data = 'N/A', tituloPeriodo = 'N/A', mes = 'N/A', ano = 'N/A', periodoSemana = 'N/A';
+
+        turno = partes.includes("turno1") ? "Turno 1" : (partes.includes("turno2") ? "Turno 2" : "N/A");
+
+        if (partes[0] === "semana" && partes.length >= 5) { // Ex: semana.08a12.04.25.turno1.json
+            tipo = "semanal";
+            periodoSemana = partes[1].replace('a', ' a '); // "08 a 12"
+            mes = partes[2];
+            ano = "20" + partes[3];
+            tituloPeriodo = `Semana de ${periodoSemana.split(' a ')[0]} a ${periodoSemana.split(' a ')[1]}/${mes}/${ano}`;
+            data = `${mes}/${ano}`; // Para agrupamento
+        } else if (partes[0] === "mensal" && partes.length >= 4) { // Ex: mensal.04.25.turno1.json
+            tipo = "mensal";
+            mes = partes[1];
+            ano = "20" + partes[2];
+            try {
+                 const nomeMes = new Date(parseInt(ano), parseInt(mes) - 1, 1).toLocaleString('pt-BR', { month: 'long' });
+                 tituloPeriodo = `${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)}/${ano}`;
+            } catch (e) {
+                 tituloPeriodo = `Mês ${mes}/${ano}`; // Fallback
+            }
+            data = `${mes}/${ano}`; // Para identificação interna/agrupamento
+        } else if (partes.length >= 5) { // Assume diário Ex: segunda.feira.14.04.25.turno1.json ou terca.15.04.25.turno1.json
+             tipo = "diario";
+             let diaNome = partes[0];
+             let offset = 0;
+             if (partes[1] === "feira") {
+                 diaSemana = diaNome.charAt(0).toUpperCase() + diaNome.slice(1) + "-feira";
+                 offset = 1;
+             } else {
+                 diaSemana = diaNome.charAt(0).toUpperCase() + diaNome.slice(1);
+             }
+             const diaNum = partes[1 + offset];
+             mes = partes[2 + offset];
+             ano = "20" + partes[3 + offset];
+             data = `${diaNum}/${mes}/${ano}`;
+             tituloPeriodo = `${diaSemana}, ${data}`;
+        }
+
+        return { nome: nomeArquivo, tipo, diaSemana, data, turno, mes, ano, periodoSemana, tituloPeriodo };
+    }
+
+    function commonChartOptions(titleText) {
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' },
+                title: { display: true, text: titleText, font: { size: 16 } },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) { label += ': '; }
+                            if (context.parsed.y !== null && !isNaN(context.parsed.y)) {
+                                label += context.parsed.y.toFixed(3) + '%';
+                            } else {
+                                label += 'N/D';
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { callback: function(value) { return value + '%'; } },
+                    title: { display: true, text: 'Percentual (%)' }
+                },
+                x: { ticks: { autoSkip: false, maxRotation: 70, minRotation: 0 } }
+            },
+            animation: { duration: 500 } // Manter alguma animação fora do PDF
+        };
+    }
+
+
+    // --- Funções de Exibição ---
+    function mostrarCabecalho(info1, info2 = null) {
+        const div = document.getElementById("info");
+        let titulo = "";
+        let tipoRelatorio = 'N/A';
+        if (info1.tipo === 'diario') tipoRelatorio = 'Diário';
+        else if (info1.tipo === 'semanal') tipoRelatorio = 'Semanal';
+        else if (info1.tipo === 'mensal') tipoRelatorio = 'Mensal';
+
+        if (info2) { // Comparativo
+            const icone1 = info1.turno === 'Turno 1' ? '🔵' : '🟢';
+            const icone2 = info2.turno === 'Turno 1' ? '🔵' : '🟢';
+            titulo = `📊 Comparativo ${tipoRelatorio} (${info1.tituloPeriodo})<br>${icone1} ${info1.turno} vs ${icone2} ${info2.turno}`;
+        } else { // Individual
+            const corIcone = info1.turno === 'Turno 1' ? '🔵' : (info1.turno === 'Turno 2' ? '🟢' : '📄');
+            titulo = `📄 Relatório ${tipoRelatorio} (${info1.tituloPeriodo})<br>${corIcone} ${info1.turno}`;
+        }
+        div.innerHTML = titulo;
+        div.style.display = 'block';
+    }
+
+    function mostrarTabela(dadosTurno1, infoTurno1, modo = 'diarioIndividual', dadosTurno2 = null, infoTurno2 = null) {
+        let html = "<table><thead><tr><th>Produto</th>";
+        const labels = [];
+        const dadosGrafico1 = [];
+        const dadosGrafico2 = []; // Usado para meta ou segundo turno
+        destruirGraficos();
+        //console.log(`Modo de Tabela: ${modo}`);
+
+        if (modo === 'comparativo' && dadosTurno2 && infoTurno2) {
+            currentChartType = 'comparativo';
+            html += `<th class="numeric">${infoTurno1.turno} (%)</th><th class="numeric">${infoTurno2.turno} (%)</th><th class="numeric">Dif. (%)</th><th class="numeric">Dif. (Kg)</th><th class="numeric">Dif. (Cx)</th><th class="center">🏆 Melhor Turno</th></tr></thead><tbody>`;
+            let vitorias1 = 0, vitorias2 = 0, empates = 0;
+            const produtosProcessados = new Set();
+
+            // Processa itens do Turno 1
+            for (let item1 of dadosTurno1) {
+                 const produto = item1.produto;
+                 produtosProcessados.add(produto);
+                 const item2 = dadosTurno2.find(it => it.produto === produto);
+                 const realizado1 = parseFloat(item1.realizado) || 0;
+                 html += `<tr><td>${produto}</td><td class="numeric">${realizado1.toFixed(3)}%</td>`;
+
+                 if (item2) {
+                    const realizado2 = parseFloat(item2.realizado) || 0;
+                    const quilos1 = parseFloat(item1.quilos) || 0;
+                    const quilos2 = parseFloat(item2.quilos) || 0;
+                    const caixas1 = parseFloat(item1.caixas) || 0;
+                    const caixas2 = parseFloat(item2.caixas) || 0;
+
+                    const diffPerc = realizado2 - realizado1;
+                    const diffKg = quilos2 - quilos1;
+                    const diffCx = Math.round(caixas2) - Math.round(caixas1);
+
+                    let melhorTurno = "Empate 🤔";
+                    let classeMelhor = "na-meta";
+                    if (diffPerc > 0.0001) { melhorTurno = `${infoTurno2.turno} ${infoTurno2.turno === 'Turno 1' ? '🔵' : '🟢'}`; vitorias2++; classeMelhor = 'positivo'; }
+                    else if (diffPerc < -0.0001) { melhorTurno = `${infoTurno1.turno} ${infoTurno1.turno === 'Turno 1' ? '🔵' : '🟢'}`; vitorias1++; classeMelhor = 'negativo'; }
+                    else { empates++; }
+
+                    const classeDiffPerc = diffPerc > 0.0001 ? 'positivo' : (diffPerc < -0.0001 ? 'negativo' : 'na-meta');
+                    const classeDiffKg = diffKg > 0 ? 'positivo' : (diffKg < 0 ? 'negativo' : 'na-meta');
+                    const classeDiffCx = diffCx > 0 ? 'positivo' : (diffCx < 0 ? 'negativo' : 'na-meta');
+
+                    html += `<td class="numeric">${realizado2.toFixed(3)}%</td><td class="numeric ${classeDiffPerc}">${diffPerc >= 0 ? '+' : ''}${diffPerc.toFixed(3)}%</td><td class="numeric ${classeDiffKg}">${diffKg >= 0 ? '+' : ''}${diffKg.toFixed(2)}</td><td class="numeric ${classeDiffCx}">${diffCx >= 0 ? '+' : ''}${diffCx}</td><td class="center ${classeMelhor}">${melhorTurno}</td>`;
+                    labels.push(produto);
+                    dadosGrafico1.push(realizado1);
+                    dadosGrafico2.push(realizado2);
+                 } else {
+                    html += `<td class="center">-</td><td colspan="4" class="center"><i>Não produzido no ${infoTurno2.turno}</i></td><td class="center">${infoTurno1.turno} ${infoTurno1.turno === 'Turno 1' ? '🔵' : '🟢'}</td>`;
+                    labels.push(produto);
+                    dadosGrafico1.push(realizado1);
+                    dadosGrafico2.push(NaN); // Não tem dado para o turno 2
+                 }
+                 html += `</tr>`;
+            }
+
+            // Processa itens exclusivos do Turno 2
+            for (let item2 of dadosTurno2) {
+                 if (!produtosProcessados.has(item2.produto)) {
+                    const produto = item2.produto;
+                    const realizado2 = parseFloat(item2.realizado) || 0;
+                    html += `<tr><td>${produto}</td><td class="center">-</td><td class="numeric">${realizado2.toFixed(3)}%</td><td colspan="3" class="center"><i>Não produzido no ${infoTurno1.turno}</i></td><td class="center">${infoTurno2.turno} ${infoTurno2.turno === 'Turno 1' ? '🔵' : '🟢'}</td></tr>`;
+                    labels.push(produto);
+                    dadosGrafico1.push(NaN); // Não tem dado para o turno 1
+                    dadosGrafico2.push(realizado2);
+                 }
+            }
+
+            html += "</tbody></table>";
+            html += `<div class="summary"><strong>Resumo Comparativo (${infoTurno1.tipo}):</strong><br>${infoTurno1.turno === 'Turno 1' ? '🔵' : '🟢'} ${infoTurno1.turno} venceu em ${vitorias1} produto(s).<br>${infoTurno2.turno === 'Turno 1' ? '🔵' : '🟢'} ${infoTurno2.turno} venceu em ${vitorias2} produto(s).<br>🤔 Empates em ${empates} produto(s).<br><strong>🏆 Vencedor Geral: ${vitorias1 > vitorias2 ? infoTurno1.turno : (vitorias2 > vitorias1 ? infoTurno2.turno : 'Empate Técnico')}</strong></div>`;
+            desenharGraficoComparativo(labels, dadosGrafico1, dadosGrafico2, infoTurno1.turno, infoTurno2.turno, infoTurno1.tipo);
+
+        } else { // Modos Individuais (diario, semanal, mensal)
+            currentChartType = 'individual';
+            let modoIndividual = 'diarioIndividual'; // Default
+            if (infoTurno1.tipo === 'semanal') {
+                modoIndividual = 'semanalIndividual';
+                html += `<th class="numeric">Meta (%)</th><th class="numeric">Realizado (%)</th><th class="numeric">Dif. (%)</th><th class="numeric">Diferença (Kg)</th><th class="numeric">Diferença (Cx)</th><th class="center">Status Semanal</th></tr></thead><tbody>`;
+            } else if (infoTurno1.tipo === 'mensal') {
+                modoIndividual = 'mensalIndividual';
+                html += `<th class="numeric">Meta (%)</th><th class="numeric">Realizado Médio (%)</th><th class="numeric">Dif. (%)</th><th class="numeric">Dif. Total (Kg)</th><th class="numeric">Dif. Total (Cx)</th><th class="center">Status Mensal</th></tr></thead><tbody>`;
+            } else { // Diário
+                 html += `<th class="numeric">Meta (%)</th><th class="numeric">Realizado (%)</th><th class="numeric">Dif. (%)</th><th class="center">Meta Atingida</th><th class="numeric">Quilos (Kg)</th><th class="numeric">Caixas</th></tr></thead><tbody>`;
+            }
+
+            for (let item of dadosTurno1) {
+                 const produto = item.produto;
+                 const meta = parseFloat(item.meta) || 0;
+                 const realizado = parseFloat(item.realizado) || 0;
+                 const quilos = parseFloat(item.quilos) || 0;
+                 const caixas = parseFloat(item.caixas) || 0;
+                 const caixasArredondadas = Math.round(caixas);
+                 const diffPerc = realizado - meta;
+                 const classeDiffPerc = Math.abs(diffPerc) < 0.0001 ? 'na-meta' : (diffPerc > 0 ? 'positivo' : 'negativo');
+                 const diffPercentFormatted = `${diffPerc >= 0 ? '+' : ''}${diffPerc.toFixed(3)}%`;
+
+                 html += `<tr><td>${produto}</td><td class="numeric">${meta.toFixed(3)}%</td><td class="numeric">${realizado.toFixed(3)}%</td><td class="numeric ${classeDiffPerc}">${diffPercentFormatted}</td>`;
+
+                 if (modoIndividual === 'semanalIndividual' || modoIndividual === 'mensalIndividual') {
+                    // Lógica para calcular diferença de KG/CX em relação à meta percentual
+                    let diffKgNum = 0; let diffCaixasNum = 0; let statusLabel = ""; let statusClass = ""; let displayDiffKg = "N/A"; let displayDiffCx = "N/A";
+                    const labelTipo = modoIndividual === 'semanalIndividual' ? 'Semanal' : 'Mensal';
+
+                     if (meta > 0 && realizado > 0) {
+                         const fator = meta / realizado;
+                         const targetKg = quilos * fator;
+                         const targetCaixas = caixas * fator;
+                         diffKgNum = quilos - targetKg; // Positivo = excedeu, Negativo = faltou
+                         const diffCaixasPrecise = caixas - targetCaixas;
+                         diffCaixasNum = Math.round(diffCaixasPrecise); // Usar round para o mais próximo
+
+                         displayDiffKg = `${diffKgNum >= 0 ? '+' : ''}${diffKgNum.toFixed(2)}`;
+                         displayDiffCx = `${diffKgNum >= 0 ? '+' : ''}${diffCaixasNum}`;
+                     } else if (meta == 0 && realizado == 0) {
+                          diffKgNum = 0; diffCaixasNum = 0; displayDiffKg = "+0.00"; displayDiffCx = "+0";
+                     } else if (meta > 0 && realizado == 0) { // Não produziu nada, mas tinha meta
+                          diffKgNum = -Infinity; diffCaixasNum = -Infinity; displayDiffKg = "(Falta Total)"; displayDiffCx = "(Falta Total)";
+                     } else if (meta == 0 && realizado > 0) { // Produziu sem meta % (excedente puro)
+                          diffKgNum = quilos; diffCaixasNum = caixasArredondadas; displayDiffKg = `+${quilos.toFixed(2)}`; displayDiffCx = `+${caixasArredondadas}`;
+                     }
+
+                     // Define status (prioriza KG/CX se houver diferença significativa)
+                     if (Math.abs(diffKgNum) < 0.01 && Math.abs(diffPerc) < 0.0001) { // Ambos muito próximos
+                         statusLabel = `🎯 Na Meta ${labelTipo}`; statusClass = "na-meta"; displayDiffKg = "+0.00"; displayDiffCx = "+0";
+                     } else if (diffKgNum > 0 || (meta == 0 && realizado > 0)) {
+                         statusLabel = `✅ Excedente ${labelTipo}`; statusClass = "positivo";
+                     } else { // diffKgNum < 0 ou (meta > 0 e realizado = 0)
+                         statusLabel = `❌ Faltou ${labelTipo}`; statusClass = "negativo";
+                         // Ajustar display de caixas para mostrar o quanto faltou (arredondado p/ cima)
+                         if (diffKgNum < 0 && modoIndividual === 'mensalIndividual') { // Exemplo: Ajuste para mensal
+                              // Poderia mostrar Math.ceil(Math.abs(diffCaixasPrecise)) aqui se quisesse
+                         }
+                     }
+                     html += `<td class="numeric ${statusClass}">${displayDiffKg}</td><td class="numeric ${statusClass}">${displayDiffCx}</td><td class="center ${statusClass}">${statusLabel}</td>`;
+
+                 } else { // Diário
+                    const atingiu = realizado >= meta ? "✅" : "❌";
+                    html += `<td class="center">${atingiu}</td><td class="numeric">${quilos.toFixed(2)}</td><td class="numeric">${caixasArredondadas}</td>`;
+                 }
+                 html += `</tr>`;
+                 labels.push(produto);
+                 dadosGrafico1.push(meta); // Eixo 1 = Meta
+                 dadosGrafico2.push(realizado); // Eixo 2 = Realizado
+            }
+            html += "</tbody></table>";
+            desenharGraficoIndividual(labels, dadosGrafico1, dadosGrafico2, infoTurno1.turno, infoTurno1.tipo);
+        }
+
+        document.getElementById("resultado").innerHTML = html;
+        document.getElementById("contentArea").style.display = 'block';
+        document.querySelector('.btn-pdf-visao').style.display = 'inline-block';
+    }
+
+    function desenharGraficoComparativo(labels, data1, data2, label1, label2, tipoAnalise) {
+        //console.log("Desenhando gráfico COMPARATIVO...");
+        const container = document.getElementById("graficoComparativoContainer");
+        const canvas = document.getElementById("graficoComparativo");
+        container.style.display = "block";
+        document.getElementById("graficoIndividualContainer").style.display = "none";
+        const ctx = canvas.getContext('2d');
+        if (graficoComparativoInstancia) { graficoComparativoInstancia.destroy(); }
+
+        const tipoGraficoComp = tipoAnalise.charAt(0).toUpperCase() + tipoAnalise.slice(1); // Diario, Semanal, Mensal
+
+        try {
+            graficoComparativoInstancia = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: `${label1} (% Realizado)`, backgroundColor: 'rgba(54, 162, 235, 0.7)', borderColor: 'rgba(54, 162, 235, 1)', borderWidth: 1, data: data1, skipNull: true },
+                        { label: `${label2} (% Realizado)`, backgroundColor: 'rgba(75, 192, 192, 0.7)', borderColor: 'rgba(75, 192, 192, 1)', borderWidth: 1, data: data2, skipNull: true }
+                    ]
+                },
+                options: commonChartOptions(`Comparativo ${tipoGraficoComp} de Rendimento (% Realizado)`)
+            });
+            //console.log("Instância do gráfico comparativo criada.");
+        } catch (error) {
+            console.error("Erro ao criar gráfico comparativo:", error);
+            container.innerHTML = "<p class='negativo'>Erro ao renderizar o gráfico comparativo.</p>";
+        }
+    }
+
+    function desenharGraficoIndividual(labels, metas, realizados, turnoLabel, tipoAnalise) {
+         //console.log("Desenhando gráfico INDIVIDUAL...");
+        const container = document.getElementById("graficoIndividualContainer");
+        const canvas = document.getElementById("graficoIndividual");
+        container.style.display = "block";
+        document.getElementById("graficoComparativoContainer").style.display = "none";
+        const ctx = canvas.getContext('2d');
+        if (graficoIndividualInstancia) { graficoIndividualInstancia.destroy(); }
+
+        const turnoColorMeta = 'rgba(255, 159, 64, 0.7)'; // Laranja para meta
+        const turnoColorRealizado = turnoLabel.includes("1") ? 'rgba(54, 162, 235, 0.7)' : 'rgba(75, 192, 192, 0.7)'; // Azul T1, Verde T2
+        const borderColorRealizado = turnoLabel.includes("1") ? 'rgba(54, 162, 235, 1)' : 'rgba(75, 192, 192, 1)';
+        const tipoGrafico = tipoAnalise.charAt(0).toUpperCase() + tipoAnalise.slice(1); // Diario, Semanal, Mensal
+
+        try {
+            graficoIndividualInstancia = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Meta (%)', backgroundColor: turnoColorMeta, borderColor: 'rgba(255, 159, 64, 1)', borderWidth: 1, data: metas },
+                        { label: 'Realizado (%)', backgroundColor: turnoColorRealizado, borderColor: borderColorRealizado, borderWidth: 1, data: realizados }
+                    ]
+                },
+                options: commonChartOptions(`Rendimento ${tipoGrafico} ${turnoLabel}: Meta vs Realizado (%)`)
+            });
+             //console.log("Instância do gráfico individual criada.");
+        } catch (error) {
+            console.error("Erro ao criar gráfico individual:", error);
+            container.innerHTML = "<p class='negativo'>Erro ao renderizar o gráfico individual.</p>";
+        }
+    }
+
+    // --- Funções de Navegação e Controle ---
+    function voltarMenu() {
+        destruirGraficos();
+        document.querySelector(".menu").style.display = 'block';
+        document.querySelector(".voltar").style.display = 'none';
+        document.getElementById("info").style.display = 'none';
+        document.getElementById("contentArea").style.display = 'none';
+        document.getElementById("resultado").innerHTML = "";
+        document.querySelector('.btn-pdf-visao').style.display = 'none';
+        document.getElementById('seletorPeriodo').style.display = 'none'; // Esconde seletores
+        tipoAnaliseAtual = null; // Limpa o tipo selecionado
+    }
+
+    function selecionarPeriodo(tipo) {
+        tipoAnaliseAtual = tipo; // Guarda o tipo de análise desejada (ex: 'diario1', 'comparar_semana')
+        //console.log("Selecionando período para:", tipoAnaliseAtual);
+        document.querySelector(".menu").style.display = 'none';
+        document.getElementById("contentArea").style.display = 'none';
+        document.getElementById("info").style.display = 'none';
+        destruirGraficos();
+
+        const seletorPeriodoDiv = document.getElementById('seletorPeriodo');
+        const tituloSpan = document.getElementById('tipoAnaliseSelecionada');
+        const seletorData = document.getElementById('seletorData');
+        const seletorSemana = document.getElementById('seletorSemana');
+        const seletorMesAno = document.getElementById('seletorMes'); // Div que contém ano e mês
+
+        // Esconde todos os seletores específicos
+        seletorData.style.display = 'none';
+        seletorSemana.style.display = 'none';
+        seletorMesAno.style.display = 'none';
+
+        // Mostra o seletor correto baseado no tipo
+        let tituloAnalise = "Análise";
+        if (tipo.includes('diario') || tipo.includes('comparar_dia')) {
+            tituloAnalise = 'Diária';
+            seletorData.style.display = 'block';
+            // Tenta definir a data padrão para hoje, se não houver valor
+            const inputData = document.getElementById('inputData');
+            if (!inputData.value) {
+                inputData.valueAsDate = new Date();
+            }
+        } else if (tipo.includes('semanal') || tipo.includes('comparar_semana')) {
+            tituloAnalise = 'Semanal';
+            seletorSemana.style.display = 'block';
+        } else if (tipo.includes('mensal') || tipo.includes('comparar_mes')) {
+            tituloAnalise = 'Mensal';
+            seletorMesAno.style.display = 'block';
+        }
+        tituloSpan.textContent = tituloAnalise;
+
+        seletorPeriodoDiv.style.display = 'block'; // Mostra a área de seleção
+        document.querySelector(".voltar").style.display = 'inline-block'; // Mostra o botão Voltar Principal
+    }
+
+    function cancelarSelecao() {
+        document.getElementById('seletorPeriodo').style.display = 'none';
+        voltarMenu(); // Reutiliza a função voltarMenu para retornar ao menu principal
+    }
+
+    async function carregarDadosSelecionados() {
+        const statusDiv = document.getElementById("status");
+        statusDiv.innerHTML = "⏳ Carregando dados selecionados...";
+        statusDiv.style.color = "var(--button-grey)"; // Reset color
+        statusDiv.style.display = 'block';
+        document.getElementById('seletorPeriodo').style.display = 'none'; // Esconde seletores após clicar
+
+        let nomeArquivo1 = null, nomeArquivo2 = null;
+        let info1 = null, info2 = null;
+        let modoTabela = '';
+        dados = {}; // Limpa dados da visualização anterior
+
+        try {
+            // 1. Determinar os nomes de arquivo esperados com base na seleção
+            if (tipoAnaliseAtual.includes('diario') || tipoAnaliseAtual.includes('comparar_dia')) {
+                const dataInput = document.getElementById('inputData').value; // Formato YYYY-MM-DD
+                if (!dataInput) throw new Error("Nenhuma data selecionada.");
+
+                // Converte YYYY-MM-DD para o formato do nome do arquivo (ex: segunda.feira.14.04.25)
+                 // Cuidado com fuso horário, usar UTC para evitar problemas de dia
+                 const dateObj = new Date(dataInput + 'T00:00:00Z'); // Use Z para UTC
+                 const diaSemanaNome = dateObj.toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'UTC' }).toLowerCase();
+                 const diaNum = String(dateObj.getUTCDate()).padStart(2, '0');
+                 const mesNum = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+                 const anoCurto = String(dateObj.getUTCFullYear()).substring(2);
+
+                 // Monta base do nome do arquivo (tentar os dois formatos: com e sem 'feira')
+                 const baseFilenameFeira = `${diaSemanaNome}.${diaNum}.${mesNum}.${anoCurto}`; // ex: segunda-feira.14.04.25
+                 const baseFilenameSemFeira = diaSemanaNome.replace('-feira', '') + `.${diaNum}.${mesNum}.${anoCurto}`; // ex: segunda.14.04.25
+
+                 // Função helper para encontrar o arquivo correto (com ou sem 'feira')
+                 const findFile = (base, turno) => {
+                    const nomeComFeira = base.replace('.', '.feira.') + `.${turno}.json`;
+                    const nomeSemFeira = base + `.${turno}.json`;
+                    if (arquivosDisponiveis.includes(nomeComFeira)) return nomeComFeira;
+                    if (arquivosDisponiveis.includes(nomeSemFeira)) return nomeSemFeira;
+                    return null; // Não encontrado
+                 }
+
+                 if (tipoAnaliseAtual === 'diario1' || tipoAnaliseAtual === 'comparar_dia') {
+                     nomeArquivo1 = findFile(baseFilenameSemFeira, 'turno1');
+                     if (!nomeArquivo1) nomeArquivo1 = findFile(baseFilenameFeira.replace('-feira','.feira'), 'turno1'); // Correção: replace -feira por .feira
+                 }
+                 if (tipoAnaliseAtual === 'diario2' || tipoAnaliseAtual === 'comparar_dia') {
+                     nomeArquivo2 = findFile(baseFilenameSemFeira, 'turno2');
+                     if (!nomeArquivo2) nomeArquivo2 = findFile(baseFilenameFeira.replace('-feira','.feira'), 'turno2'); // Correção
+                 }
+                 modoTabela = tipoAnaliseAtual.includes('comparar') ? 'comparativo' : 'diarioIndividual';
+
+
+            } else if (tipoAnaliseAtual.includes('semanal') || tipoAnaliseAtual.includes('comparar_semana')) {
+                const idSemana = document.getElementById('selectSemana').value; // Valor é o nome base (ex: semana.08a12.04.25)
+                if (!idSemana) throw new Error("Nenhuma semana selecionada.");
+
+                if (tipoAnaliseAtual === 'semanal1' || tipoAnaliseAtual === 'comparar_semana') {
+                    nomeArquivo1 = `${idSemana}.turno1.json`;
+                }
+                if (tipoAnaliseAtual === 'semanal2' || tipoAnaliseAtual === 'comparar_semana') {
+                    nomeArquivo2 = `${idSemana}.turno2.json`;
+                }
+                 modoTabela = tipoAnaliseAtual.includes('comparar') ? 'comparativo' : 'semanalIndividual';
+
+            } else if (tipoAnaliseAtual.includes('mensal') || tipoAnaliseAtual.includes('comparar_mes')) {
+                const mesNum = document.getElementById('selectMes').value;
+                const anoCompleto = document.getElementById('selectAnoMes').value;
+                if (!mesNum || !anoCompleto) throw new Error("Mês ou ano não selecionado.");
+                const anoCurto = anoCompleto.substring(2);
+                const mesPad = String(mesNum).padStart(2,'0');
+                const baseFilename = `mensal.${mesPad}.${anoCurto}`;
+
+                if (tipoAnaliseAtual === 'mensal1' || tipoAnaliseAtual === 'comparar_mes') {
+                    nomeArquivo1 = `${baseFilename}.turno1.json`;
+                }
+                if (tipoAnaliseAtual === 'mensal2' || tipoAnaliseAtual === 'comparar_mes') {
+                    nomeArquivo2 = `${baseFilename}.turno2.json`;
+                }
+                 modoTabela = tipoAnaliseAtual.includes('comparar') ? 'comparativo' : 'mensalIndividual';
+            }
+
+            // 2. Verificar se os arquivos necessários existem e carregá-los
+            const promessas = [];
+            const arquivosParaCarregar = [];
+
+            if (nomeArquivo1) arquivosParaCarregar.push({ nome: nomeArquivo1, key: 'turno1' });
+            if (nomeArquivo2 && modoTabela === 'comparativo') arquivosParaCarregar.push({ nome: nomeArquivo2, key: 'turno2' });
+             else if (nomeArquivo2 && !nomeArquivo1) arquivosParaCarregar.push({ nome: nomeArquivo2, key: 'turno1' }); // Se for individual T2
+
+            for (const arq of arquivosParaCarregar) {
+                if (!arquivosDisponiveis.includes(arq.nome)) {
+                     throw new Error(`Arquivo necessário (${arq.nome}) não encontrado no manifesto index.json.`);
+                }
+                promessas.push(
+                    fetch(arq.nome)
+                        .then(res => {
+                            if (!res.ok) return Promise.reject(`Erro HTTP ${res.status} ao carregar ${arq.nome}`);
+                            return res.json();
+                        })
+                        .then(d => {
+                            dados[arq.key] = d;
+                            // Guarda a info correspondente
+                            if (arq.key === 'turno1') info1 = extrairInfo(arq.nome);
+                            if (arq.key === 'turno2') info2 = extrairInfo(arq.nome);
+                        })
+                        .catch(err => {
+                            console.error(`Falha ao carregar ou processar ${arq.nome}:`, err);
+                            throw new Error(`Não foi possível carregar dados de ${arq.nome}. Verifique o arquivo e o console.`);
+                        })
+                );
+            }
+
+            if (promessas.length === 0) {
+                throw new Error("Nenhum arquivo de dados correspondente ao período selecionado foi encontrado.");
+            }
+
+            await Promise.all(promessas);
+
+            // 3. Chamar as funções de exibição com os dados carregados
+            if (!info1 && !info2) { // Nenhum dado carregado com sucesso
+                 throw new Error("Falha ao carregar informações dos arquivos.");
+            }
+
+            // Define qual info usar como base para o cabeçalho (prioriza info1 se houver)
+            const baseInfo = info1 || info2;
+            const comparativoInfo = (info1 && info2) ? info2 : null; // Só passa info2 se for comparativo
+
+            mostrarCabecalho(baseInfo, comparativoInfo);
+
+            if (modoTabela === 'comparativo') {
+                 if (dados.turno1 && dados.turno2) {
+                      mostrarTabela(dados.turno1, info1, modoTabela, dados.turno2, info2);
+                 } else {
+                      throw new Error("Dados incompletos para a comparação. Falta arquivo de um dos turnos.");
+                 }
+             } else { // Modos individuais
+                 // Mostra os dados do turno que foi carregado (pode ser turno1 ou turno2 se só um existir/foi selecionado)
+                 const dadosParaMostrar = dados.turno1 || dados.turno2;
+                 const infoParaMostrar = info1 || info2;
+                 if (dadosParaMostrar) {
+                     mostrarTabela(dadosParaMostrar, infoParaMostrar, modoTabela);
+                 } else {
+                      throw new Error("Não foi possível carregar os dados para a visualização individual.");
+                 }
+             }
+
+            statusDiv.style.display = 'none'; // Esconde status de carregamento
+
+        } catch (error) {
+            console.error("Erro ao carregar/processar dados selecionados:", error);
+            destruirGraficos();
+            document.getElementById("info").innerHTML = `❌ Erro: ${error.message}`;
+            document.getElementById("info").style.display = 'block';
+            document.getElementById("contentArea").style.display = 'none';
+            document.querySelector('.btn-pdf-visao').style.display = 'none';
+            statusDiv.innerHTML = `❌ Erro ao carregar: ${error.message}`;
+            statusDiv.style.color = "red";
+            statusDiv.style.display = 'block';
+        }
+    }
+
+
+    // --- Funções de Inicialização e Preenchimento de Seletores ---
+    function popularSeletores() {
+        const semanas = new Map(); // Usar Map para evitar duplicatas e guardar texto
+        const mesesAnos = new Map(); // Agrupa por ano -> mês
+        const anosSet = new Set();
+
+        arquivosDisponiveis.forEach(nomeArquivo => {
+            const info = extrairInfo(nomeArquivo);
+            if (!info || info.tipo === 'N/A') return; // Ignora arquivos mal formatados
+
+            if (info.tipo === 'semanal') {
+                // Usa o nome base como ID único da semana
+                const idSemana = nomeArquivo.replace('.turno1.json', '').replace('.turno2.json', '');
+                if (!semanas.has(idSemana)) {
+                     // Armazenar data de início para ordenação (pegar o primeiro dia da 'periodoSemana')
+                      const primeiroDia = parseInt(info.periodoSemana.split(' a ')[0]);
+                      const dataOrdenacao = new Date(parseInt(info.ano), parseInt(info.mes) - 1, primeiroDia);
+                      semanas.set(idSemana, { texto: info.tituloPeriodo, data: dataOrdenacao });
+                }
+            } else if (info.tipo === 'mensal') {
+                 anosSet.add(info.ano);
+                 if (!mesesAnos.has(info.ano)) {
+                     mesesAnos.set(info.ano, new Map());
+                 }
+                 if (!mesesAnos.get(info.ano).has(info.mes)) {
+                     mesesAnos.get(info.ano).set(info.mes, info.tituloPeriodo.split('/')[0]); // Guarda nome do mês
+                 }
+            }
+        });
+
+        // Popular Seletor de Semanas (ordenado por data)
+        const selectSemana = document.getElementById('selectSemana');
+        selectSemana.innerHTML = '<option value="">Selecione...</option>';
+        const semanasOrdenadas = [...semanas.entries()].sort(([, a], [, b]) => b.data - a.data); // Mais recentes primeiro
+        semanasOrdenadas.forEach(([id, info]) => {
+            const option = document.createElement('option');
+            option.value = id;
+            option.textContent = info.texto;
+            selectSemana.appendChild(option);
+        });
+
+        // Popular Seletor de Anos (para seleção de mês)
+        const selectAnoMes = document.getElementById('selectAnoMes');
+        selectAnoMes.innerHTML = '<option value="">Selecione...</option>';
+        [...anosSet].sort().reverse().forEach(ano => { // Mais recentes primeiro
+             const option = document.createElement('option');
+             option.value = ano;
+             option.textContent = ano;
+             selectAnoMes.appendChild(option);
+        });
+
+        // Popular Seletor de Meses quando o Ano mudar
+        const selectMes = document.getElementById('selectMes');
+        selectAnoMes.addEventListener('change', () => {
+             const anoSelecionado = selectAnoMes.value;
+             selectMes.innerHTML = '<option value="">Selecione...</option>'; // Limpa e adiciona default
+             if(anoSelecionado && mesesAnos.has(anoSelecionado)) {
+                 const mesesDoAno = [...mesesAnos.get(anoSelecionado).entries()].sort(([a], [b]) => parseInt(a) - parseInt(b)); // Ordena por número do mês
+                  mesesDoAno.forEach(([mesNum, mesNome]) => {
+                      const option = document.createElement('option');
+                      option.value = mesNum; // Valor é o número do mês (ex: "04")
+                      option.textContent = mesNome; // Texto é o nome do mês (ex: "Abril")
+                      selectMes.appendChild(option);
+                  });
+             } else if (anoSelecionado) {
+                 selectMes.innerHTML = '<option value="">Nenhum mês encontrado</option>';
+             } else {
+                  selectMes.innerHTML = '<option value="">Selecione o Ano</option>';
+             }
+        });
+    }
+
+    async function iniciar() {
+        const statusDiv = document.getElementById("status");
+        try {
+            statusDiv.textContent = "⏳ Carregando manifesto de arquivos...";
+            const response = await fetch("index.json"); // Assume que index.json está na raiz
+            if (!response.ok) throw new Error(`Erro ao carregar index.json: ${response.status} ${response.statusText}`);
+            const listaManifesto = await response.json();
+            arquivosDisponiveis = listaManifesto.arquivos || [];
+
+            if (arquivosDisponiveis.length === 0) {
+                 throw new Error("Nenhum arquivo encontrado no manifesto index.json.");
+            }
+
+            popularSeletores(); // Preenche os dropdowns com base nos arquivos listados
+
+            statusDiv.style.display = "none"; // Esconde status após sucesso
+            //console.log("Manifesto de arquivos carregado. Pronto para seleção.");
+
+        } catch (error) {
+            console.error("Erro crítico ao iniciar:", error);
+            statusDiv.innerHTML = `❌ Erro crítico: ${error.message}. Verifique o console e o arquivo index.json.`;
+            statusDiv.style.color = "red";
+        }
+    }
+
+    // --- Função de Exportação PDF (Adaptada ligeiramente) ---
+    async function exportarPDF_VisaoAtual() {
+        console.log("Iniciando exportação PDF...");
+        const elementToCapture = document.getElementById('contentArea');
+        const infoDiv = document.getElementById('info');
+        const pdfButton = document.querySelector('.btn-pdf-visao');
+        const originalPdfButtonDisplay = pdfButton.style.display;
+        const originalChartAnimation = Chart.defaults.animation.duration;
+
+        // --- Prepare for Capture ---
+        pdfButton.style.display = 'none'; // Hide the export button
+        Chart.defaults.animation.duration = 0; // Disable chart animations for render
+
+        // Re-render charts synchronously if possible (Chart.js v3+)
+        // This helps ensure they are fully drawn before capture
+        if (graficoIndividualInstancia) { graficoIndividualInstancia.update('none'); }
+        if (graficoComparativoInstancia) { graficoComparativoInstancia.update('none'); }
+
+        // Add title to the capture area
+        const titleElement = document.createElement('div');
+        titleElement.innerHTML = infoDiv.innerHTML;
+        titleElement.className = 'info'; // Use existing info class
+        titleElement.style.display = 'block';
+        elementToCapture.insertBefore(titleElement, elementToCapture.firstChild);
+
+        // --- Configure PDF Options ---
+        const infoText = infoDiv.innerText.split('\n')[0] || 'Visao_Atual'; // Get first line of title
+        const filename = `relatorio_${infoText.substring(0, 40).replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`;
+
+        const opt = {
+          margin:       [0.4, 0.4, 0.4, 0.4], // Margins T, L, B, R in inches
+          filename:     filename,
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  {
+              scale: 2,
+              useCORS: true,
+              logging: false,
+              dpi: 192,
+               onrendered: function(canvas) { // Try to disable smoothing
+                 const ctx = canvas.getContext('2d');
+                 ctx.imageSmoothingEnabled = false;
+               }
+          },
+          jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' },
+          pagebreak:    {
+               mode: ['css', 'avoid-all'], // Use CSS rules and try to avoid breaks
+               avoid: ['.chart-container', '.summary', 'tr', 'h1', '.info'] // Elements to keep intact
+           }
+        };
+
+        // --- Generate PDF ---
+        // Delay slightly to ensure charts are rendered after animation disable/update
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        try {
+            console.log(`Gerando PDF: ${filename}`);
+            await html2pdf().from(elementToCapture).set(opt).save();
+            console.log("PDF gerado com sucesso.");
+        } catch (error) {
+            console.error("Erro ao gerar PDF:", error);
+            alert("Ocorreu um erro ao gerar o PDF. Verifique o console.");
+        } finally {
+            // --- Cleanup After Capture ---
+            elementToCapture.removeChild(titleElement); // Remove the cloned title
+            pdfButton.style.display = originalPdfButtonDisplay; // Restore button
+            Chart.defaults.animation.duration = originalChartAnimation; // Restore animations
+             // Re-enable dynamic updates if needed
+             if (graficoIndividualInstancia) { graficoIndividualInstancia.update(); }
+             if (graficoComparativoInstancia) { graficoComparativoInstancia.update(); }
+            console.log("Limpeza pós-PDF concluída.");
+        }
+    }
+
+    // --- Inicia a aplicação quando a janela carregar ---
+    window.onload = iniciar;
+
+</script>
+</body>
+</html>
