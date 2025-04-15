@@ -1,0 +1,101 @@
+[
+  {
+    "produto": "Coxa e Sobrecoxa",
+    "meta": 26.5,
+    "realizado": 27.017,
+    "atingiuMeta": true,
+    "diferencaPercentual": "0.52",
+    "quilos": 6070.68,
+    "caixas": 303.53
+  },
+  {
+    "produto": "Filé",
+    "meta": 26.5,
+    "realizado": 26.18,
+    "atingiuMeta": false,
+    "diferencaPercentual": "-0.32",
+    "quilos": 3757.48,
+    "caixas": 187.87
+  },
+  {
+    "produto": "Coxinha da Asa",
+    "meta": 4.6,
+    "realizado": 4.518,
+    "atingiuMeta": false,
+    "diferencaPercentual": "-0.08",
+    "quilos": 962.85,
+    "caixas": 48.14
+  },
+  {
+    "produto": "Meio da Asa",
+    "meta": 2.8,
+    "realizado": 2.756,
+    "atingiuMeta": false,
+    "diferencaPercentual": "-0.04",
+    "quilos": 516.65,
+    "caixas": 25.83
+  },
+  {
+    "produto": "Ponta da Asa",
+    "meta": 0.93,
+    "realizado": 0.894,
+    "atingiuMeta": false,
+    "diferencaPercentual": "-0.04",
+    "quilos": 422.72,
+    "caixas": 21.14
+  },
+  {
+    "produto": "Fígado",
+    "meta": 1.6,
+    "realizado": 1.375,
+    "atingiuMeta": false,
+    "diferencaPercentual": "-0.23",
+    "quilos": 2641.98,
+    "caixas": 176.13
+  },
+  {
+    "produto": "Moela",
+    "meta": 1.1,
+    "realizado": 0.97,
+    "atingiuMeta": false,
+    "diferencaPercentual": "-0.13",
+    "quilos": 1526.48,
+    "caixas": 76.32
+  },
+  {
+    "produto": "Coração",
+    "meta": 0.48,
+    "realizado": 0.457,
+    "atingiuMeta": false,
+    "diferencaPercentual": "-0.02",
+    "quilos": 270.07,
+    "caixas": 13.5
+  },
+  {
+    "produto": "Pés",
+    "meta": 2.85,
+    "realizado": 1.867,
+    "atingiuMeta": false,
+    "diferencaPercentual": "-0.98",
+    "quilos": 11542.51,
+    "caixas": 721.41
+  },
+  {
+    "produto": "CMS",
+    "meta": 15,
+    "realizado": 14.705,
+    "atingiuMeta": false,
+    "diferencaPercentual": "-0.29",
+    "quilos": 3463.93,
+    "caixas": 173.2
+  },
+  {
+    "produto": "Sambiquira",
+    "meta": 0.8,
+    "realizado": 0.396,
+    "atingiuMeta": false,
+    "diferencaPercentual": "-0.40",
+    "quilos": 4743.82,
+    "caixas": 237.19
+  }
+]
