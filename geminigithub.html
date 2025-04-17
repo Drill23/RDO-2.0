@@ -1,0 +1,1353 @@
+<script>
+    const META_RI = 81.600; // Meta de Rendimento Industrial
+
+    let dados = {}; // Armazena dados carregados para a visão ATUAL (pode ter periodo1, periodo2)
+    let arquivosDisponiveis = []; // Lista de TODOS os nomes de arquivos do index.json
+    let tipoAnaliseAtual = null; // Guarda o tipo de análise selecionado
+    let graficoPrincipalInstancia = null;
+    let graficoRIInstancia = null;
+    let graficoDiferencaInstancia = null;
+    let _cacheSeletores = { anos: [], meses: new Map(), semanas: [] }; // Cache para seletores
+
+    // --- Funções Utilitárias ---
+    function destruirGraficos() {
+        if (graficoPrincipalInstancia) { graficoPrincipalInstancia.destroy(); graficoPrincipalInstancia = null; }
+        if (graficoRIInstancia) { graficoRIInstancia.destroy(); graficoRIInstancia = null; }
+        if (graficoDiferencaInstancia) { graficoDiferencaInstancia.destroy(); graficoDiferencaInstancia = null; }
+        document.getElementById("graficoPrincipalContainer").style.display = "none";
+        document.getElementById("graficoRIContainer").style.display = "none";
+        document.getElementById("graficoDiferencaContainer").style.display = "none";
+    }
+
+    function formatPercent(value) {
+        if (value === null || value === undefined || isNaN(value)) return 'N/D';
+        return value.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + '%';
+    }
+
+    function formatKg(value) {
+        if (value === null || value === undefined || isNaN(value)) return 'N/D';
+        return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatCx(value) {
+        if (value === null || value === undefined || isNaN(value)) return 'N/D';
+        return Math.round(value).toLocaleString('pt-BR');
+    }
+
+    function getSignClass(value, threshold = 0.0001) {
+        if (value === null || value === undefined || isNaN(value)) return 'neutro';
+        if (value > threshold) return 'positivo';
+        if (value < -threshold) return 'negativo';
+        return 'neutro';
+    }
+
+    function getSignIndicator(value, threshold = 0.0001) {
+        if (value === null || value === undefined || isNaN(value)) return '<i class="neutro"></i>';
+        if (value > threshold) return '<i class="positivo"></i>';
+        if (value < -threshold) return '<i class="negativo"></i>';
+        return '<i class="neutro"></i>';
+    }
+
+    function extrairInfo(nomeArquivo) {
+        // (Mantida a função original, mas robustez no tratamento de null/undefined)
+        if (!nomeArquivo) return { nome: 'N/A', tipo: 'N/A', diaSemana: 'N/A', data: 'N/A', turno: 'N/A', mes: 'N/A', ano: 'N/A', tituloPeriodo: 'N/A', rendimento_industrial: null };
+        const partes = nomeArquivo.replace('.json', '').split('.');
+        let tipo = 'N/A', turno = 'N/A', diaSemana = 'N/A', data = 'N/A', tituloPeriodo = 'N/A', mes = 'N/A', ano = 'N/A', periodoSemana = 'N/A';
+
+        turno = partes.includes("turno1") ? "Turno 1" : (partes.includes("turno2") ? "Turno 2" : "N/A");
+
+        try {
+            if (partes[0] === "semana" && partes.length >= 5) {
+                tipo = "semanal";
+                periodoSemana = partes[1].replace('a', ' a ');
+                mes = partes[2];
+                ano = "20" + partes[3];
+                tituloPeriodo = `Semana ${periodoSemana}/${mes}/${ano}`;
+                data = `${mes}/${ano}`;
+            } else if (partes[0] === "mensal" && partes.length >= 4) {
+                tipo = "mensal";
+                mes = partes[1];
+                ano = "20" + partes[2];
+                 const nomeMes = new Date(parseInt(ano), parseInt(mes) - 1, 1).toLocaleString('pt-BR', { month: 'long' });
+                 tituloPeriodo = `${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)}/${ano}`;
+                data = `${mes}/${ano}`;
+            } else if (partes.length >= 5) {
+                 tipo = "diario";
+                 let diaNome = partes[0]; let offset = 0;
+                 if (partes[1] === "feira") { diaSemana = diaNome.charAt(0).toUpperCase() + diaNome.slice(1) + "-feira"; offset = 1; }
+                 else { diaSemana = diaNome.charAt(0).toUpperCase() + diaNome.slice(1); }
+                 const diaNum = partes[1 + offset]; mes = partes[2 + offset]; ano = "20" + partes[3 + offset];
+                 data = `${diaNum}/${mes}/${ano}`;
+                 tituloPeriodo = `${diaSemana}, ${data}`;
+            }
+        } catch (e) {
+             console.error(`Erro ao extrair info do arquivo '${nomeArquivo}':`, e);
+             // Retorna um objeto base em caso de erro para evitar quebrar o resto
+             return { nome: nomeArquivo || 'Erro', tipo: 'Erro', diaSemana: 'N/A', data: 'N/A', turno: turno, mes: 'N/A', ano: 'N/A', tituloPeriodo: 'Erro ao processar nome', rendimento_industrial: null };
+        }
+
+        return { nome: nomeArquivo, tipo, diaSemana, data, turno, mes, ano, periodoSemana, tituloPeriodo, rendimento_industrial: null };
+    }
+
+    function commonChartOptions(titleText) {
+        // (Mantida a função original)
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: { display: true, text: titleText, font: { size: 14 }, padding: { top: 10, bottom: 20 } },
+                legend: { position: 'bottom', labels: { padding: 20, boxWidth: 12, font: { size: 11 } } },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleFont: { size: 13 },
+                    bodyFont: { size: 12 },
+                    padding: 10,
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) { label += ': '; }
+                            let value = context.parsed.y;
+                            if (value !== null && !isNaN(value)) {
+                                if (context.chart.canvas.id === 'graficoRI' || (context.dataset.label && context.dataset.label.includes('%'))) {
+                                     label += formatPercent(value);
+                                } else if (context.chart.canvas.id === 'graficoDiferenca') {
+                                     label += (value >= 0 ? '+' : '') + formatPercent(value);
+                                }
+                                else {
+                                     label += value.toLocaleString('pt-BR');
+                                }
+                            } else { label += 'N/D'; }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        font: { size: 11 },
+                        callback: function(value, index, ticks) {
+                            const isPercentLike = this.chart.canvas.id.includes('RI') || this.chart.canvas.id.includes('Diferenca') || (this.chart.data.datasets.length > 0 && this.chart.data.datasets[0].data.some(v => v !== null && !isNaN(v) && v < 150));
+                            return isPercentLike ? value + '%' : value.toLocaleString('pt-BR');
+                        }
+                    },
+                    grid: { color: '#e9ecef' }
+                },
+                x: {
+                    ticks: { font: { size: 11 }, autoSkip: false, maxRotation: 60, minRotation: 0 },
+                    grid: { display: false }
+                }
+            },
+            animation: { duration: 300 }
+        };
+    }
+
+    // --- Funções de Exibição (mantidas: mostrarCabecalho, mostrarAnaliseRI, mostrarTabelaComparativa, mostrarTabelaIndividual) ---
+    // Nenhuma mudança necessária nestas funções para a correção do carregamento de arquivos.
+    // Apenas certifique-se de que elas lidam bem com dados potencialmente nulos se o carregamento falhar parcialmente.
+    // (O código anterior já tinha alguma robustez nesse sentido)
+
+    function mostrarCabecalho(info1, info2 = null, tipoComparacao = null) {
+        const div = document.getElementById("info");
+        let titulo = "";
+        let subtitulo = "";
+        const iconeT1 = '🔵';
+        const iconeT2 = '🟢';
+
+        if (!info1) { // Segurança caso info1 seja nulo
+            div.innerHTML = "⚠️ Erro ao carregar informações do período 1";
+            div.style.display = 'block';
+            return;
+        }
+
+        if (info2) { // Comparativo
+            const tipoBase = info1.tipo && info1.tipo !== 'N/A' ? info1.tipo.charAt(0).toUpperCase() + info1.tipo.slice(1) : 'Período';
+            const icone1 = info1.turno === 'Turno 1' ? iconeT1 : iconeT2;
+            const icone2 = info2.turno === 'Turno 1' ? iconeT1 : iconeT2;
+
+            if (tipoComparacao === 'comparar_dia' || tipoComparacao === 'comparar_semana' || tipoComparacao === 'comparar_mes') {
+                 titulo = `📊 Comparativo ${tipoBase} ${info1.turno} vs ${info2.turno}`;
+                 subtitulo = `${info1.tituloPeriodo || 'Período 1'} vs ${info2.tituloPeriodo || 'Período 2'}`; // Usar título ou fallback
+                 if (info1.tituloPeriodo === info2.tituloPeriodo) subtitulo = info1.tituloPeriodo; // Se for T1 vs T2 do mesmo dia/semana/mês
+            } else if (tipoComparacao === 'comparar_dias_turno' || tipoComparacao === 'comparar_meses_turno') {
+                 titulo = `🔁 Comparativo ${tipoBase} ${info1.turno || 'Turno'}`;
+                 subtitulo = `${info1.tituloPeriodo || 'Período 1'} vs ${info2.tituloPeriodo || 'Período 2'}`;
+            } else if (tipoComparacao === 'comparar_mes_ano') {
+                 titulo = `📅 Comparativo ${tipoBase} ${info1.turno || 'Turno'} (Ano vs Ano)`;
+                 subtitulo = `${info1.tituloPeriodo || 'Período 1'} vs ${info2.tituloPeriodo || 'Período 2'}`;
+            }
+            div.innerHTML = `${titulo}<span>${subtitulo}</span>`;
+
+        } else { // Individual
+            const tipoRelatorio = info1.tipo && info1.tipo !== 'N/A' ? info1.tipo.charAt(0).toUpperCase() + info1.tipo.slice(1) : 'Relatório';
+            const corIcone = info1.turno === 'Turno 1' ? iconeT1 : (info1.turno === 'Turno 2' ? iconeT2 : '📄');
+            titulo = `${corIcone} ${tipoRelatorio} ${info1.turno || 'Turno'}`;
+            subtitulo = info1.tituloPeriodo || 'Período não identificado';
+            div.innerHTML = `${titulo}<span>${subtitulo}</span>`;
+        }
+        div.style.display = 'block';
+    }
+
+    function mostrarAnaliseRI(ri1, info1, ri2, info2) {
+        const container = document.getElementById('resultado');
+        if (!container) return;
+
+        // Remove análise de RI anterior, se houver
+        const oldRiSummary = container.querySelector('.ri-summary');
+        if (oldRiSummary) oldRiSummary.remove();
+
+        const div = document.createElement('div');
+        div.className = 'summary-section ri-summary'; // Classe específica para RI
+
+        let html = '<h4>Análise de Rendimento Industrial (RI)</h4><ul>';
+        const metaRIFormatado = formatPercent(META_RI);
+        let riDataAvailable = false;
+
+        function compararRI(riValor, infoPeriodo) {
+            let texto = '';
+            if (!infoPeriodo) return { texto: '<li>Erro: Informações do período ausentes</li>', liClass: 'neutro' }; // Segurança
+
+            const periodoLabel = `${infoPeriodo.tituloPeriodo || 'Período'} (${infoPeriodo.turno || 'Turno'})`;
+
+            if (riValor === null || riValor === undefined || isNaN(riValor)) {
+                 texto = `<li>${periodoLabel}: <strong>RI não informado</strong></li>`;
+            } else {
+                riDataAvailable = true; // Marcar que temos dados de RI
+                const riFormatado = formatPercent(riValor);
+                const diffMeta = riValor - META_RI;
+                const diffMetaFormatado = (diffMeta >= 0 ? '+' : '') + formatPercent(diffMeta);
+                const classeMeta = getSignClass(diffMeta);
+                texto = `<li>${periodoLabel}: <strong>${riFormatado}</strong> `;
+                texto += `(<span class="${classeMeta}">${diffMetaFormatado}</span> vs Meta ${metaRIFormatado})</li>`;
+            }
+            return texto;
+        }
+
+        if (info1) html += compararRI(ri1, info1);
+
+        let riDiff = null;
+        if (info2) { // Só faz sentido comparar se info2 existir
+            html += compararRI(ri2, info2);
+
+            // Comparação entre os dois períodos
+            if (ri1 !== null && !isNaN(ri1) && ri2 !== null && !isNaN(ri2)) {
+                 riDiff = ri2 - ri1;
+                 const riDiffFormatado = (riDiff >= 0 ? '+' : '') + formatPercent(riDiff);
+                 const classeDiff = getSignClass(riDiff);
+                 const vsLabel = `(${info2.tituloPeriodo || 'P2'} vs ${info1.tituloPeriodo || 'P1'})`;
+                 html += `<li>Comparativo ${vsLabel}: <strong class="${classeDiff}">${riDiffFormatado}</strong></li>`;
+            } else if (riDataAvailable) { // Se um tem e outro não
+                 html += `<li>Comparativo: Diferença não calculável (RI ausente em um período)</li>`;
+            }
+        }
+
+        html += '</ul>';
+
+        // Só adiciona a seção se houver dados de RI ou se for mensal (para indicar ausência)
+        if (riDataAvailable || (info1?.tipo === 'mensal')) {
+            div.innerHTML = html;
+            // Adicionar antes da tabela ou depois? Geralmente depois da tabela principal.
+            const tableElement = container.querySelector('table');
+            if (tableElement) {
+                tableElement.parentNode.insertBefore(div, tableElement.nextSibling); // Insere depois da tabela
+            } else {
+                container.appendChild(div); // Adiciona no final se não houver tabela
+            }
+        }
+
+
+        // Desenhar gráfico de RI se houver dados
+        if (riDataAvailable) {
+             desenharGraficoRI(ri1, info1, ri2, info2, META_RI);
+        } else {
+            document.getElementById("graficoRIContainer").style.display = "none"; // Garante que gráfico RI fique oculto
+        }
+    }
+
+    function mostrarTabelaComparativa(dados1, info1, dados2, info2, tipoComparacao) {
+        const container = document.getElementById('resultado');
+        container.innerHTML = ''; // Limpa container antes de adicionar novo conteúdo
+        if (!dados1?.produtos || !dados2?.produtos || !info1 || !info2) {
+             container.innerHTML = "<p class='negativo'>Erro: Dados ou informações incompletas para comparação.</p>";
+             return;
+        }
+
+        let html = "<table><thead><tr><th>Produto</th>";
+        const labels = []; // Labels para gráficos
+        const comparativoProdutos = []; // Para os gráficos
+
+        // Cabeçalhos dinâmicos
+        const header1 = `${info1.tituloPeriodo || 'P1'} (${info1.turno || 'T?'})`;
+        const header2 = `${info2.tituloPeriodo || 'P2'} (${info2.turno || 'T?'})`;
+        html += `<th class="numeric">${header1} (%)</th><th class="numeric">${header2} (%)</th><th class="numeric">Dif. (%)</th><th class="numeric">Dif. (Kg)</th><th class="numeric">Dif. (Cx)</th><th class="center">🏆 Melhor</th></tr></thead><tbody>`;
+
+        let vitorias1 = 0, vitorias2 = 0, empates = 0;
+        const produtosProcessados = new Set();
+
+        // 1. Processa itens do Período 1
+        dados1.produtos.forEach(item1 => {
+             const produto = item1.produto;
+             produtosProcessados.add(produto);
+             const item2 = dados2.produtos.find(it => it.produto === produto);
+             const realizado1 = parseFloat(item1.realizado) || 0;
+             const quilos1 = parseFloat(item1.quilos) || 0;
+             const caixas1 = parseFloat(item1.caixas) || 0;
+
+             html += `<tr><td>${produto}</td><td class="numeric">${formatPercent(realizado1)}</td>`;
+
+             let realizado2 = NaN, quilos2 = NaN, caixas2 = NaN;
+             let diffPerc = NaN, diffKg = NaN, diffCx = NaN;
+             let melhorTurno = `❓`; // Default incerto
+             let classeMelhor = 'neutro';
+
+             if (item2) { // Produto existe em ambos
+                realizado2 = parseFloat(item2.realizado) || 0;
+                quilos2 = parseFloat(item2.quilos) || 0;
+                caixas2 = parseFloat(item2.caixas) || 0;
+
+                diffPerc = realizado2 - realizado1;
+                diffKg = quilos2 - quilos1;
+                diffCx = Math.round(caixas2) - Math.round(caixas1);
+
+                const threshold = 0.0001;
+                if (diffPerc > threshold) { melhorTurno = `${info2.turno || 'P2'} ${info2.turno === 'Turno 1' ? '🔵' : '🟢'}`; vitorias2++; classeMelhor = 'positivo'; }
+                else if (diffPerc < -threshold) { melhorTurno = `${info1.turno || 'P1'} ${info1.turno === 'Turno 1' ? '🔵' : '🟢'}`; vitorias1++; classeMelhor = 'negativo'; }
+                else { melhorTurno = "Empate 🤔"; empates++; classeMelhor = 'neutro'; }
+
+                const classeDiffPerc = getSignClass(diffPerc);
+                const classeDiffKg = getSignClass(diffKg, 0.01);
+                const classeDiffCx = getSignClass(diffCx, 0.5);
+
+                html += `<td class="numeric">${formatPercent(realizado2)}</td>`;
+                html += `<td class="numeric indicator ${classeDiffPerc}">${getSignIndicator(diffPerc)}${(diffPerc >= 0 ? '+' : '')}${formatPercent(diffPerc)}</td>`;
+                html += `<td class="numeric indicator ${classeDiffKg}">${getSignIndicator(diffKg, 0.01)}${(diffKg >= 0 ? '+' : '')}${formatKg(diffKg)}</td>`;
+                html += `<td class="numeric indicator ${classeDiffCx}">${getSignIndicator(diffCx, 0.5)}${(diffCx >= 0 ? '+' : '')}${formatCx(diffCx)}</td>`;
+                html += `<td class="center ${classeMelhor}">${melhorTurno}</td>`;
+             } else { // Produto existe no Período 1, mas não no 2
+                realizado2 = NaN; // Marcar como NaN para gráficos
+                melhorTurno = `${info1.turno || 'P1'} ${info1.turno === 'Turno 1' ? '🔵' : '🟢'}`; // P1 "vence" por existir
+                classeMelhor = 'negativo'; // Assume-se que P2 perdeu por não ter
+                html += `<td class="center">-</td><td colspan="3" class="center"><i>Não produzido em ${info2.tituloPeriodo || 'P2'}</i></td><td class="center ${classeMelhor}">${melhorTurno}</td>`;
+                // Contar vitória para P1? Ou ignorar na contagem geral? Vamos ignorar por enquanto.
+             }
+             html += `</tr>`;
+             comparativoProdutos.push({ produto: produto, perc1: realizado1, perc2: realizado2, diffPerc: diffPerc });
+        });
+
+        // 2. Processa itens exclusivos do Período 2
+        dados2.produtos.forEach(item2 => {
+             if (!produtosProcessados.has(item2.produto)) {
+                const produto = item2.produto;
+                const realizado2 = parseFloat(item2.realizado) || 0;
+                const melhorTurno = `${info2.turno || 'P2'} ${info2.turno === 'Turno 1' ? '🔵' : '🟢'}`; // P2 vence por existir
+                const classeMelhor = 'positivo';
+                html += `<tr><td>${produto}</td><td class="center">-</td><td class="numeric">${formatPercent(realizado2)}</td><td colspan="3" class="center"><i>Não produzido em ${info1.tituloPeriodo || 'P1'}</i></td><td class="center ${classeMelhor}">${melhorTurno}</td></tr>`;
+                comparativoProdutos.push({ produto: produto, perc1: NaN, perc2: realizado2, diffPerc: NaN });
+                // Contar vitória para P2? Ignorando por enquanto.
+             }
+        });
+
+        html += "</tbody></table>";
+
+        // Adiciona Tabela ao DOM
+        const tabelaDiv = document.createElement('div');
+        tabelaDiv.innerHTML = html;
+        container.appendChild(tabelaDiv);
+
+        // Adiciona Resumo Comparativo
+        const resumoDiv = document.createElement('div');
+        resumoDiv.className = 'summary-section';
+        let resumoHtml = `<h4>Resumo Comparativo (Produtos Comuns)</h4><ul>`; // Focar em produtos comuns para o resumo
+        resumoHtml += `<li>${info1.tituloPeriodo || 'P1'} (${info1.turno || 'T1'}) venceu em <strong>${vitorias1}</strong> produto(s).</li>`;
+        resumoHtml += `<li>${info2.tituloPeriodo || 'P2'} (${info2.turno || 'T2'}) venceu em <strong>${vitorias2}</strong> produto(s).</li>`;
+        resumoHtml += `<li>Empates em <strong>${empates}</strong> produto(s).</li>`;
+        let vencedorGeral = "Empate Técnico 🤔";
+        let classeVencedor = "neutro";
+        if (vitorias1 > vitorias2) { vencedorGeral = `${info1.turno || 'P1'} (${info1.tituloPeriodo || 'P1'}) ${info1.turno === 'Turno 1' ? '🔵' : '🟢'}`; classeVencedor = "negativo"; }
+        else if (vitorias2 > vitorias1) { vencedorGeral = `${info2.turno || 'P2'} (${info2.tituloPeriodo || 'P2'}) ${info2.turno === 'Turno 1' ? '🔵' : '🟢'}`; classeVencedor = "positivo"; }
+        resumoHtml += `<li><strong>🏆 Vencedor Geral (por produtos comuns): <span class="${classeVencedor}">${vencedorGeral}</span></strong></li>`;
+        resumoHtml += `</ul>`;
+        resumoDiv.innerHTML = resumoHtml;
+        container.appendChild(resumoDiv); // Adiciona resumo após a tabela
+
+        // Prepara dados para gráficos (apenas produtos onde ambos existem para comparação direta)
+        const produtosComuns = comparativoProdutos.filter(p => !isNaN(p.perc1) && !isNaN(p.perc2));
+        labels.push(...produtosComuns.map(p => p.produto));
+        const dadosGraficoP1 = produtosComuns.map(p => p.perc1);
+        const dadosGraficoP2 = produtosComuns.map(p => p.perc2);
+        const diffData = produtosComuns.map(p => p.diffPerc);
+
+        // Desenhar gráficos
+        desenharGraficoPrincipalComparativo(labels, dadosGraficoP1, info1, dadosGraficoP2, info2);
+        desenharGraficoDiferenca(labels, diffData, info1, info2);
+
+        // Adiciona Análise de RI (se aplicável e ainda não adicionada)
+        if (info1.tipo === 'mensal' && !container.querySelector('.ri-summary')) {
+             mostrarAnaliseRI(info1.rendimento_industrial, info1, info2.rendimento_industrial, info2);
+        }
+    }
+
+    function mostrarTabelaIndividual(dadosTurno, infoTurno) {
+        const container = document.getElementById('resultado');
+        container.innerHTML = ''; // Limpa container
+         if (!dadosTurno?.produtos || !infoTurno) {
+             container.innerHTML = "<p class='negativo'>Erro: Dados ou informações incompletas para análise individual.</p>";
+             return;
+         }
+
+        let html = "<table><thead><tr><th>Produto</th>";
+        const labels = [];
+        const metasData = [];
+        const realizadosData = [];
+
+        const isMonthly = infoTurno.tipo === 'mensal';
+        const isWeekly = infoTurno.tipo === 'semanal';
+
+        html += `<th class="numeric">Meta (%)</th>`;
+        html += `<th class="numeric">${isMonthly ? 'Realizado Médio (%)' : 'Realizado (%)'}</th>`;
+        html += `<th class="numeric">Dif. (%)</th>`;
+        if (isMonthly || isWeekly) {
+            const labelTipo = isMonthly ? 'Mensal' : 'Semanal';
+            html += `<th class="numeric">Dif. (Kg)</th>`;
+            html += `<th class="numeric">Dif. (Cx)</th>`;
+            html += `<th class="center">Status ${labelTipo}</th>`;
+        } else { // Diário
+            html += `<th class="center">Meta Atingida</th>`;
+            html += `<th class="numeric">Quilos (Kg)</th>`;
+            html += `<th class="numeric">Caixas</th>`;
+        }
+        html += `</tr></thead><tbody>`;
+
+        dadosTurno.produtos.forEach(item => {
+             const produto = item.produto;
+             const meta = parseFloat(item.meta) || 0;
+             const realizado = parseFloat(item.realizado) || 0;
+             const quilos = parseFloat(item.quilos) || 0;
+             const caixas = parseFloat(item.caixas) || 0;
+             const diffPerc = realizado - meta;
+             const classeDiffPerc = getSignClass(diffPerc);
+
+             html += `<tr><td>${produto}</td>`;
+             html += `<td class="numeric">${formatPercent(meta)}</td>`;
+             html += `<td class="numeric">${formatPercent(realizado)}</td>`;
+             html += `<td class="numeric indicator ${classeDiffPerc}">${getSignIndicator(diffPerc)}${(diffPerc >= 0 ? '+' : '')}${formatPercent(diffPerc)}</td>`;
+
+             if (isMonthly || isWeekly) {
+                let diffKgNum = 0, diffCaixasNum = 0, statusLabel = "N/A", statusClass = "neutro", displayDiffKg = "N/A", displayDiffCx = "N/A";
+                const labelTipo = isMonthly ? 'Mensal' : 'Semanal';
+
+                 if (meta > 0 && realizado > 0) {
+                     const fator = meta / realizado;
+                     const targetKg = quilos * fator;
+                     const targetCaixas = caixas * fator;
+                     diffKgNum = quilos - targetKg;
+                     diffCaixasNum = Math.round(caixas - targetCaixas);
+                     displayDiffKg = `${getSignIndicator(diffKgNum, 0.01)}${(diffKgNum >= 0 ? '+' : '')}${formatKg(diffKgNum)}`;
+                     displayDiffCx = `${getSignIndicator(diffCaixasNum, 0.5)}${(diffCaixasNum >= 0 ? '+' : '')}${formatCx(diffCaixasNum)}`;
+                 } else if (meta == 0 && realizado == 0) {
+                      diffKgNum = 0; diffCaixasNum = 0; displayDiffKg = "<i class='neutro'></i>+0,00"; displayDiffCx = "<i class='neutro'></i>+0";
+                 } else if (meta > 0 && realizado == 0) {
+                      diffKgNum = -Infinity; diffCaixasNum = -Infinity; displayDiffKg = "<i class='negativo'></i>(Falta Total)"; displayDiffCx = "<i class='negativo'></i>(Falta Total)";
+                 } else if (meta == 0 && realizado > 0) {
+                      diffKgNum = quilos; diffCaixasNum = Math.round(caixas); displayDiffKg = `<i class='positivo'></i>+${formatKg(quilos)}`; displayDiffCx = `<i class='positivo'></i>+${formatCx(caixas)}`;
+                 }
+
+                 if (Math.abs(diffPerc) < 0.0001 && Math.abs(diffKgNum) < 0.01) {
+                      statusLabel = `🎯 Na Meta ${labelTipo}`; statusClass = "neutro";
+                 } else if (diffPerc >= 0 || diffKgNum >= 0) { // Considera positivo se % OU kg/cx for positivo (ou zero)
+                      statusLabel = `✅ Acima Meta ${labelTipo}`; statusClass = "positivo";
+                 } else {
+                      statusLabel = `❌ Abaixo Meta ${labelTipo}`; statusClass = "negativo";
+                 }
+                 // Segurança para NaN em diffKg/Cx
+                 displayDiffKg = isNaN(diffKgNum) ? "N/A" : displayDiffKg;
+                 displayDiffCx = isNaN(diffCaixasNum) ? "N/A" : displayDiffCx;
+
+                 html += `<td class="numeric ${getSignClass(diffKgNum, 0.01)}">${displayDiffKg}</td>`;
+                 html += `<td class="numeric ${getSignClass(diffCaixasNum, 0.5)}">${displayDiffCx}</td>`;
+                 html += `<td class="center ${statusClass}">${statusLabel}</td>`;
+
+             } else { // Diário
+                const atingiu = realizado >= meta;
+                const metaStatusIcon = atingiu ? '<span class="positivo">✅ Sim</span>' : '<span class="negativo">❌ Não</span>';
+                html += `<td class="center">${metaStatusIcon}</td>`;
+                html += `<td class="numeric">${formatKg(quilos)}</td>`;
+                html += `<td class="numeric">${formatCx(caixas)}</td>`;
+             }
+             html += `</tr>`;
+             labels.push(produto);
+             metasData.push(meta);
+             realizadosData.push(realizado);
+        });
+        html += "</tbody></table>";
+
+        // Adiciona Tabela ao DOM
+        const tabelaDiv = document.createElement('div');
+        tabelaDiv.innerHTML = html;
+        container.appendChild(tabelaDiv);
+
+        // Desenhar gráfico Meta vs Realizado
+        desenharGraficoPrincipalIndividual(labels, metasData, realizadosData, infoTurno);
+
+        // Mostrar análise de RI se for mensal e tiver o dado
+        if (isMonthly) {
+            mostrarAnaliseRI(infoTurno.rendimento_industrial, infoTurno, null, null);
+        }
+    }
+
+    // --- Funções de Desenho de Gráficos (mantidas: desenharGraficoPrincipalIndividual, desenharGraficoPrincipalComparativo, desenharGraficoRI, desenharGraficoDiferenca) ---
+    // Nenhuma mudança necessária aqui para a correção do carregamento.
+    function desenharGraficoPrincipalIndividual(labels, metas, realizados, infoTurno) {
+        const container = document.getElementById("graficoPrincipalContainer");
+        const canvas = document.getElementById("graficoPrincipal");
+        const tituloH4 = document.getElementById("graficoPrincipalTitulo");
+        container.style.display = "block";
+        const ctx = canvas.getContext('2d');
+        if (graficoPrincipalInstancia) { graficoPrincipalInstancia.destroy(); }
+
+        const tipoGrafico = infoTurno.tipo?.charAt(0).toUpperCase() + infoTurno.tipo?.slice(1) || 'Individual';
+        const turnoLabel = infoTurno.turno || 'Turno';
+        tituloH4.textContent = `Rendimento ${tipoGrafico} ${turnoLabel}: Meta vs Realizado (%)`;
+
+        const corRealizado = turnoLabel.includes("1") ? 'rgba(0, 123, 255, 0.7)' : 'rgba(40, 167, 69, 0.7)';
+        const borderRealizado = turnoLabel.includes("1") ? 'rgba(0, 123, 255, 1)' : 'rgba(40, 167, 69, 1)';
+
+        graficoPrincipalInstancia = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Meta (%)',
+                        data: metas,
+                        backgroundColor: 'rgba(255, 193, 7, 0.6)', // Amarelo para meta
+                        borderColor: 'rgba(255, 193, 7, 1)',
+                        borderWidth: 1,
+                        order: 2
+                    },
+                    {
+                        label: 'Realizado (%)',
+                        data: realizados,
+                        backgroundColor: corRealizado,
+                        borderColor: borderRealizado,
+                        borderWidth: 1,
+                        order: 1
+                    }
+                ]
+            },
+            options: commonChartOptions(tituloH4.textContent)
+        });
+    }
+
+    function desenharGraficoPrincipalComparativo(labels, data1, info1, data2, info2) {
+        const container = document.getElementById("graficoPrincipalContainer");
+        const canvas = document.getElementById("graficoPrincipal");
+        const tituloH4 = document.getElementById("graficoPrincipalTitulo");
+        container.style.display = "block";
+        const ctx = canvas.getContext('2d');
+        if (graficoPrincipalInstancia) { graficoPrincipalInstancia.destroy(); }
+
+        const tipoGraficoComp = info1.tipo?.charAt(0).toUpperCase() + info1.tipo?.slice(1) || 'Comparativo';
+        tituloH4.textContent = `Comparativo ${tipoGraficoComp}: ${info1.turno || 'P1'} vs ${info2.turno || 'P2'} (% Realizado)`;
+
+        const cor1 = info1.turno === 'Turno 1' ? 'rgba(0, 123, 255, 0.7)' : 'rgba(40, 167, 69, 0.7)';
+        const border1 = info1.turno === 'Turno 1' ? 'rgba(0, 123, 255, 1)' : 'rgba(40, 167, 69, 1)';
+        let cor2 = info2.turno === 'Turno 1' ? 'rgba(0, 123, 255, 0.7)' : 'rgba(40, 167, 69, 0.7)';
+        let border2 = info2.turno === 'Turno 1' ? 'rgba(0, 123, 255, 1)' : 'rgba(40, 167, 69, 1)';
+
+        if (info1.turno && info1.turno === info2.turno) { // Ajuste de cor se for mesmo turno
+             cor2 = 'rgba(23, 162, 184, 0.7)'; // Cyan
+             border2 = 'rgba(23, 162, 184, 1)';
+        }
+
+        graficoPrincipalInstancia = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: `${info1.tituloPeriodo || 'P1'} (${info1.turno || 'T?'})`,
+                        data: data1,
+                        backgroundColor: cor1,
+                        borderColor: border1,
+                        borderWidth: 1,
+                        skipNull: true
+                    },
+                    {
+                        label: `${info2.tituloPeriodo || 'P2'} (${info2.turno || 'T?'})`,
+                        data: data2,
+                        backgroundColor: cor2,
+                        borderColor: border2,
+                        borderWidth: 1,
+                        skipNull: true
+                    }
+                ]
+            },
+            options: commonChartOptions(tituloH4.textContent)
+        });
+    }
+
+    function desenharGraficoRI(ri1, info1, ri2, info2, meta) {
+        const container = document.getElementById("graficoRIContainer");
+        const canvas = document.getElementById("graficoRI");
+        if (!info1) return; // Precisa pelo menos do info1
+
+        container.style.display = "block";
+        const ctx = canvas.getContext('2d');
+        if (graficoRIInstancia) { graficoRIInstancia.destroy(); }
+
+        const labelsRI = [];
+        const dataRI = [];
+        const colorsRI = [];
+        const bordersRI = [];
+
+        if (ri1 !== null && !isNaN(ri1)) {
+            labelsRI.push(`${info1.tituloPeriodo || 'P1'} (${info1.turno || 'T?'})`);
+            dataRI.push(ri1);
+            colorsRI.push(info1.turno === 'Turno 1' ? 'rgba(0, 123, 255, 0.7)' : 'rgba(40, 167, 69, 0.7)');
+            bordersRI.push(info1.turno === 'Turno 1' ? 'rgba(0, 123, 255, 1)' : 'rgba(40, 167, 69, 1)');
+        }
+        if (info2 && ri2 !== null && !isNaN(ri2)) { // Verifica se info2 existe
+            labelsRI.push(`${info2.tituloPeriodo || 'P2'} (${info2.turno || 'T?'})`);
+            dataRI.push(ri2);
+            let cor2 = info2.turno === 'Turno 1' ? 'rgba(0, 123, 255, 0.7)' : 'rgba(40, 167, 69, 0.7)';
+            let border2 = info2.turno === 'Turno 1' ? 'rgba(0, 123, 255, 1)' : 'rgba(40, 167, 69, 1)';
+            if (info1.turno && info1.turno === info2.turno) {
+                cor2 = 'rgba(23, 162, 184, 0.7)'; // Cyan
+                border2 = 'rgba(23, 162, 184, 1)';
+            }
+            colorsRI.push(cor2);
+            bordersRI.push(border2);
+        }
+
+        if (labelsRI.length === 0) { // Se nenhum RI foi válido
+            container.style.display = "none";
+            return;
+        }
+
+        graficoRIInstancia = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labelsRI,
+                datasets: [
+                    {
+                        label: 'Rendimento Industrial (%)',
+                        data: dataRI,
+                        backgroundColor: colorsRI,
+                        borderColor: bordersRI,
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Meta RI (%)',
+                        data: labelsRI.map(() => meta),
+                        type: 'line',
+                        borderColor: 'rgba(255, 193, 7, 1)', // Amarelo
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1,
+                        order: -1
+                    }
+                ]
+            },
+            options: commonChartOptions(`Rendimento Industrial (RI): Meta ${formatPercent(meta)}`)
+        });
+    }
+
+    function desenharGraficoDiferenca(labels, diffData, info1, info2) {
+        const container = document.getElementById("graficoDiferencaContainer");
+        const canvas = document.getElementById("graficoDiferenca");
+        if (!info1 || !info2) return; // Precisa de ambos para comparar
+
+        container.style.display = "block";
+        const ctx = canvas.getContext('2d');
+        if (graficoDiferencaInstancia) { graficoDiferencaInstancia.destroy(); }
+
+        // Filtra dados onde a diferença é calculável (não NaN)
+        const validData = diffData.map((d, i) => ({ label: labels[i], diff: d }))
+                              .filter(item => !isNaN(item.diff));
+
+        if (validData.length === 0) { // Se não há dados válidos para o gráfico
+             container.style.display = "none";
+             return;
+        }
+
+        const validLabels = validData.map(item => item.label);
+        const validDiffs = validData.map(item => item.diff);
+
+        const backgroundColors = validDiffs.map(d => d > 0.0001 ? 'rgba(40, 167, 69, 0.7)' : (d < -0.0001 ? 'rgba(220, 53, 69, 0.7)' : 'rgba(108, 117, 125, 0.7)'));
+        const borderColors = validDiffs.map(d => d > 0.0001 ? 'rgba(40, 167, 69, 1)' : (d < -0.0001 ? 'rgba(220, 53, 69, 1)' : 'rgba(108, 117, 125, 1)'));
+
+        graficoDiferencaInstancia = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: validLabels,
+                datasets: [{
+                    label: `Diferença % (${info2.tituloPeriodo || 'P2'} vs ${info1.tituloPeriodo || 'P1'})`,
+                    data: validDiffs,
+                    backgroundColor: backgroundColors,
+                    borderColor: borderColors,
+                    borderWidth: 1
+                }]
+            },
+            options: commonChartOptions(`Diferença de Rendimento por Produto (%)`)
+        });
+    }
+
+    // --- Funções de Navegação e Controle ---
+    function voltarMenu() {
+        destruirGraficos();
+        document.querySelector(".menu").style.display = 'block';
+        document.querySelector(".voltar").style.display = 'none';
+        document.getElementById("info").style.display = 'none';
+        document.getElementById("contentArea").style.display = 'none';
+        document.getElementById("resultado").innerHTML = "";
+        document.querySelector('.btn-pdf-visao').style.display = 'none';
+        document.getElementById('seletorPeriodoContainer').style.display = 'none';
+        document.getElementById('seletores').innerHTML = '';
+        setStatus("", 'info'); // Limpa e esconde status
+        tipoAnaliseAtual = null;
+        dados = {};
+    }
+
+    function criarSeletor(id, label, tipo = 'date', opcoes = null) {
+        // (Mantida a função original)
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'seletor-item';
+        itemDiv.innerHTML = `<label for="${id}">${label}:</label>`;
+
+        if (tipo === 'date') {
+            itemDiv.innerHTML += `<input type="date" id="${id}" name="${id}">`;
+        } else if (tipo === 'select') {
+            const select = document.createElement('select');
+            select.id = id;
+            select.name = id;
+            select.innerHTML = '<option value="">Carregando...</option>';
+            itemDiv.appendChild(select);
+            if (opcoes) {
+                 select.innerHTML = '<option value="">Selecione...</option>';
+                 opcoes.forEach(opt => {
+                     const option = document.createElement('option');
+                     option.value = opt.value;
+                     option.textContent = opt.text;
+                     select.appendChild(option);
+                 });
+            }
+        }
+        return itemDiv;
+    }
+
+    function adicionarSeletoresNecessarios(tipo) {
+        // (Mantida a função original, pois a lógica de quais seletores criar parece correta)
+        const container = document.getElementById('seletores');
+        container.innerHTML = '';
+        let grupo1 = document.createElement('div');
+        grupo1.className = 'seletor-grupo';
+
+        if (tipo.includes('diario') || tipo.includes('comparar_dia')) {
+             grupo1.appendChild(criarSeletor('inputData1', 'Data Período 1'));
+             if (tipo === 'comparar_dias_turno') {
+                 container.appendChild(grupo1);
+                 let divVs = document.createElement('div'); divVs.className='seletor-divisor'; divVs.textContent = 'VS'; container.appendChild(divVs);
+                 let grupo2 = document.createElement('div'); grupo2.className = 'seletor-grupo';
+                 grupo2.appendChild(criarSeletor('inputData2', 'Data Período 2'));
+                 grupo2.appendChild(criarSeletor('selectTurnoCompDia', 'Turno', 'select'));
+                 container.appendChild(grupo2);
+                 popularSelectTurno('selectTurnoCompDia');
+             } else {
+                 container.appendChild(grupo1);
+             }
+        } else if (tipo.includes('semanal') || tipo.includes('comparar_semana')) {
+            grupo1.appendChild(criarSeletor('selectSemana1', 'Semana Período 1', 'select'));
+            popularSelectSemana('selectSemana1');
+            container.appendChild(grupo1);
+            // Nota: Comparação de semanas T1 vs T2 é tratada na lógica de carregamento (params2)
+            // Comparação de semanas diferentes do mesmo turno não está implementada nos botões.
+        } else if (tipo.includes('mensal') || tipo.includes('comparar_mes')) {
+             grupo1.appendChild(criarSeletor('selectAno1', 'Ano Período 1', 'select'));
+             grupo1.appendChild(criarSeletor('selectMes1', 'Mês Período 1', 'select'));
+             popularSelectAnoMes('selectAno1', 'selectMes1');
+
+             if (tipo === 'comparar_meses_turno') {
+                 container.appendChild(grupo1);
+                 let divVs = document.createElement('div'); divVs.className='seletor-divisor'; divVs.textContent = 'VS'; container.appendChild(divVs);
+                 let grupo2 = document.createElement('div'); grupo2.className = 'seletor-grupo';
+                 grupo2.appendChild(criarSeletor('selectAno2', 'Ano Período 2', 'select'));
+                 grupo2.appendChild(criarSeletor('selectMes2', 'Mês Período 2', 'select'));
+                 grupo2.appendChild(criarSeletor('selectTurnoCompMes', 'Turno', 'select'));
+                 container.appendChild(grupo2);
+                 popularSelectAnoMes('selectAno2', 'selectMes2');
+                 popularSelectTurno('selectTurnoCompMes');
+             } else if (tipo === 'comparar_mes_ano') {
+                 container.appendChild(grupo1);
+                 let divVs = document.createElement('div'); divVs.className='seletor-divisor'; divVs.textContent = 'VS'; container.appendChild(divVs);
+                 let grupo2 = document.createElement('div'); grupo2.className = 'seletor-grupo';
+                 grupo2.appendChild(criarSeletor('selectAno2', 'Ano Período 2', 'select')); // Só o ano 2
+                 grupo2.appendChild(criarSeletor('selectTurnoCompMesAno', 'Turno', 'select'));
+                 container.appendChild(grupo2);
+                 popularSelectAnoMes('selectAno2', null); // Popula só anos
+                 popularSelectTurno('selectTurnoCompMesAno');
+             } else {
+                 container.appendChild(grupo1);
+                 // Nota: Comparação mensal T1 vs T2 é tratada na lógica de carregamento (params2)
+             }
+        }
+    }
+
+    function selecionarPeriodo(tipo) {
+        // (Mantida a função original)
+        tipoAnaliseAtual = tipo;
+        console.log("Selecionando período para:", tipoAnaliseAtual);
+        document.querySelector(".menu").style.display = 'none';
+        document.getElementById("contentArea").style.display = 'none';
+        document.getElementById("info").style.display = 'none';
+        destruirGraficos();
+        document.getElementById("resultado").innerHTML = '';
+
+        const seletorContainer = document.getElementById('seletorPeriodoContainer');
+        const tituloSpan = document.getElementById('tipoAnaliseSelecionada');
+        const titulos = {
+             'diario1': 'Diária Turno 1', 'diario2': 'Diária Turno 2',
+             'semanal1': 'Semanal Turno 1', 'semanal2': 'Semanal Turno 2',
+             'mensal1': 'Mensal Turno 1', 'mensal2': 'Mensal Turno 2',
+             'comparar_dia': 'Comparativo Diário (T1 vs T2)',
+             'comparar_dias_turno': 'Comparativo Diário (Mesmo Turno)',
+             'comparar_semana': 'Comparativo Semanal (T1 vs T2)',
+             'comparar_mes': 'Comparativo Mensal (T1 vs T2)',
+             'comparar_meses_turno': 'Comparativo Mensal (Mesmo Turno)',
+             'comparar_mes_ano': 'Comparativo Mensal (Ano vs Ano)'
+        };
+        tituloSpan.textContent = titulos[tipo] || 'Análise';
+        adicionarSeletoresNecessarios(tipo);
+        seletorContainer.style.display = 'block';
+        document.querySelector(".voltar").style.display = 'inline-block';
+    }
+
+    function cancelarSelecao() {
+        document.getElementById('seletorPeriodoContainer').style.display = 'none';
+        voltarMenu();
+    }
+
+    function setStatus(message, type = 'loading') {
+        const statusDiv = document.getElementById("status");
+        statusDiv.textContent = message;
+        statusDiv.className = ''; // Limpa classes anteriores
+        statusDiv.classList.add(type); // Adiciona a classe do tipo (loading, error, success, info)
+        statusDiv.style.display = message ? 'block' : 'none'; // Mostra/esconde baseado na mensagem
+    }
+
+    // --- Função **CORRIGIDA** para construir e verificar nome do arquivo ---
+    function construirNomeArquivo(tipoBase, params) {
+        // tipoBase: 'diario', 'semanal', 'mensal'
+        // params: { data, semanaId, ano, mes, turno }
+        console.log(`Construindo nome para: tipo=${tipoBase}, params=`, params);
+        if (!params || !params.turno) {
+            console.warn("Parâmetros ou turno ausentes para construir nome de arquivo.");
+            return null;
+        }
+
+        let nomeFinalEncontrado = null;
+
+        if (tipoBase === 'diario') {
+            if (!params.data) { console.warn("Data ausente para arquivo diário."); return null; }
+            try {
+                 // Usar UTC para evitar problemas de fuso horário ao extrair dia/mês
+                 const dateObj = new Date(params.data + 'T00:00:00Z');
+                 if (isNaN(dateObj.getTime())) throw new Error("Data inválida fornecida."); // Verifica se a data é válida
+
+                 const diaSemanaNomeBase = dateObj.toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'UTC' }).toLowerCase(); // Ex: "segunda-feira", "terca"
+                 const diaNum = String(dateObj.getUTCDate()).padStart(2, '0');
+                 const mesNum = String(dateObj.getUTCMonth() + 1).padStart(2, '0'); // Mês é 0-indexed
+                 const anoCurto = String(dateObj.getUTCFullYear()).substring(2);
+
+                 // Gerar os DOIS possíveis nomes de arquivo
+                 // 1. Sem '-feira' (ex: segunda.01.04.24.turno1.json)
+                 const nomeSemFeira = `${diaSemanaNomeBase.replace('-feira', '')}.${diaNum}.${mesNum}.${anoCurto}.${params.turno}.json`;
+                 // 2. Com '.feira.' (ex: segunda.feira.01.04.24.turno1.json) - APENAS se o dia da semana originalmente continha '-feira'
+                 let nomeComFeira = null;
+                 if (diaSemanaNomeBase.includes('-feira')) {
+                     nomeComFeira = `${diaSemanaNomeBase.replace('-feira', '.feira')}.${diaNum}.${mesNum}.${anoCurto}.${params.turno}.json`;
+                 }
+
+                 console.log(` - Tentando formato 1 (sem feira): ${nomeSemFeira}`);
+                 if (arquivosDisponiveis.includes(nomeSemFeira)) {
+                     nomeFinalEncontrado = nomeSemFeira;
+                     console.log(`   -> ENCONTRADO!`);
+                 } else if (nomeComFeira) {
+                     console.log(` - Tentando formato 2 (com .feira.): ${nomeComFeira}`);
+                     if (arquivosDisponiveis.includes(nomeComFeira)) {
+                         nomeFinalEncontrado = nomeComFeira;
+                         console.log(`   -> ENCONTRADO!`);
+                     }
+                 }
+
+                 if (!nomeFinalEncontrado) {
+                     console.warn(`   -> NENHUM formato encontrado para ${params.data} / ${params.turno}`);
+                 }
+
+            } catch (e) {
+                console.error(`Erro ao processar data para arquivo diário (${params.data}): `, e);
+                return null;
+            }
+
+        } else if (tipoBase === 'semanal') {
+            if (!params.semanaId) { console.warn("ID da semana ausente para arquivo semanal."); return null; }
+            const nomeBase = `${params.semanaId}.${params.turno}.json`;
+            console.log(` - Tentando formato semanal: ${nomeBase}`);
+            if (arquivosDisponiveis.includes(nomeBase)) {
+                 nomeFinalEncontrado = nomeBase;
+                 console.log(`   -> ENCONTRADO!`);
+            } else {
+                 console.warn(`   -> NÃO ENCONTRADO.`);
+            }
+
+        } else if (tipoBase === 'mensal') {
+            if (!params.ano || !params.mes) { console.warn("Ano ou Mês ausente para arquivo mensal."); return null; }
+            try {
+                 const anoCurto = String(params.ano).substring(2);
+                 const mesPad = String(params.mes).padStart(2, '0');
+                 const nomeBase = `mensal.${mesPad}.${anoCurto}.${params.turno}.json`;
+                 console.log(` - Tentando formato mensal: ${nomeBase}`);
+                 if (arquivosDisponiveis.includes(nomeBase)) {
+                      nomeFinalEncontrado = nomeBase;
+                      console.log(`   -> ENCONTRADO!`);
+                 } else {
+                      console.warn(`   -> NÃO ENCONTRADO.`);
+                 }
+            } catch (e) {
+                 console.error(`Erro ao processar ano/mês para arquivo mensal (${params.ano}/${params.mes}): `, e);
+                 return null;
+            }
+        }
+
+        return nomeFinalEncontrado; // Retorna o nome encontrado ou null
+    }
+
+    async function carregarDadosSelecionados() {
+        setStatus("⏳ Carregando dados selecionados...", 'loading');
+        document.getElementById('seletorPeriodoContainer').style.display = 'none';
+        destruirGraficos();
+        document.getElementById("resultado").innerHTML = "";
+
+        let nomeArquivo1 = null, nomeArquivo2 = null;
+        let info1 = null, info2 = null;
+        dados = {};
+
+        try {
+            let params1 = { turno: 'turno1' };
+            let params2 = null; // Inicia como nulo, preenchido se for comparação
+            let tipoBase = '';
+
+            if (tipoAnaliseAtual.includes('diario') || tipoAnaliseAtual.includes('comparar_dia')) tipoBase = 'diario';
+            else if (tipoAnaliseAtual.includes('semanal') || tipoAnaliseAtual.includes('comparar_semana')) tipoBase = 'semanal';
+            else if (tipoAnaliseAtual.includes('mensal') || tipoAnaliseAtual.includes('comparar_mes')) tipoBase = 'mensal';
+            else { throw new Error("Tipo de análise inválido ou não reconhecido."); }
+
+            // --- Coleta parâmetros dos seletores ---
+            // Período 1
+            const data1Input = document.getElementById('inputData1');
+            const semana1Select = document.getElementById('selectSemana1');
+            const ano1Select = document.getElementById('selectAno1');
+            const mes1Select = document.getElementById('selectMes1');
+
+            if (data1Input) params1.data = data1Input.value;
+            if (semana1Select) params1.semanaId = semana1Select.value;
+            if (ano1Select) params1.ano = ano1Select.value;
+            if (mes1Select) params1.mes = mes1Select.value;
+
+            // Turno Período 1
+            if (tipoAnaliseAtual.endsWith('1')) params1.turno = 'turno1';
+            else if (tipoAnaliseAtual.endsWith('2')) params1.turno = 'turno2';
+            else if (tipoAnaliseAtual === 'comparar_dias_turno') params1.turno = document.getElementById('selectTurnoCompDia')?.value;
+            else if (tipoAnaliseAtual === 'comparar_meses_turno') params1.turno = document.getElementById('selectTurnoCompMes')?.value;
+            else if (tipoAnaliseAtual === 'comparar_mes_ano') params1.turno = document.getElementById('selectTurnoCompMesAno')?.value;
+            else params1.turno = 'turno1'; // Default para comparações T1 vs T2
+
+            // Período 2 (Apenas para comparações)
+            if (tipoAnaliseAtual.includes('comparar_')) {
+                params2 = { turno: 'turno2' }; // Default T2 para comparações
+                const data2Input = document.getElementById('inputData2');
+                const ano2Select = document.getElementById('selectAno2');
+                const mes2Select = document.getElementById('selectMes2');
+
+                if (tipoAnaliseAtual === 'comparar_dias_turno') {
+                    params2.data = data2Input?.value;
+                    params2.turno = params1.turno; // Mesmo turno
+                } else if (tipoAnaliseAtual === 'comparar_meses_turno') {
+                    params2.ano = ano2Select?.value;
+                    params2.mes = mes2Select?.value;
+                    params2.turno = params1.turno; // Mesmo turno
+                } else if (tipoAnaliseAtual === 'comparar_mes_ano') {
+                    params2.ano = ano2Select?.value;
+                    params2.mes = params1.mes; // Mesmo mês
+                    params2.turno = params1.turno; // Mesmo turno
+                } else { // Comparações T1 vs T2 padrão (mesmo dia/semana/mês)
+                    params2 = { ...params1, turno: 'turno2' }; // Copia params1, mas força turno2
+                }
+            }
+
+            // --- Validação básica dos parâmetros ---
+            // (Pode adicionar mais validações se necessário)
+            if (!params1.turno) throw new Error("Turno inválido para o período 1.");
+            if (params2 && !params2.turno) throw new Error("Turno inválido para o período 2.");
+
+            // --- Constrói nomes de arquivo ---
+            nomeArquivo1 = construirNomeArquivo(tipoBase, params1);
+            if (params2) {
+                 nomeArquivo2 = construirNomeArquivo(tipoBase, params2);
+            }
+
+            // --- Validação de Arquivos Encontrados ---
+            let erroArquivos = "";
+            if (!nomeArquivo1) {
+                erroArquivos += `Arquivo para ${params1.turno} (${tipoBase}) não encontrado com os parâmetros fornecidos. `;
+            }
+            if (params2 && !nomeArquivo2) {
+                 erroArquivos += `Arquivo para ${params2.turno} (${tipoBase}) no segundo período não encontrado. `;
+            }
+            // Caso especial: Análise individual T2, onde nomeArquivo1 conteria o path do T2
+            if (tipoAnaliseAtual.endsWith('2') && !nomeArquivo1) {
+                 erroArquivos = `Arquivo para Turno 2 (${tipoBase}) não encontrado.`;
+            }
+            // Caso T1 vs T2 padrão, onde P2 é derivado de P1
+            if (tipoAnaliseAtual.includes('comparar_') && !params2?.data && !params2?.ano && !nomeArquivo2 && params1.turno === 'turno1'){
+                 // Tentamos encontrar T2 com base em T1. Se não achou nomeArquivo2:
+                 erroArquivos += `Arquivo correspondente do Turno 2 não encontrado para comparação.`;
+            }
+
+
+            if (erroArquivos) {
+                 console.error("Erros de arquivos:", erroArquivos);
+                 throw new Error(erroArquivos.trim());
+            }
+
+            // --- Carrega Dados ---
+            const promessas = [];
+            const arquivosACarregar = [];
+
+            if (nomeArquivo1) arquivosACarregar.push({ nome: nomeArquivo1, key: 'periodo1' });
+            if (nomeArquivo2) arquivosACarregar.push({ nome: nomeArquivo2, key: 'periodo2' });
+
+            setStatus(`⏳ Carregando ${arquivosACarregar.map(a => a.nome).join(' e ')}...`, 'loading');
+
+            for (const arq of arquivosACarregar) {
+                console.log(`Iniciando fetch para: ${arq.nome}`);
+                promessas.push(
+                    fetch(arq.nome + "?t=" + Date.now()) // Cache bust no fetch individual também
+                        .then(res => {
+                            console.log(`Fetch para ${arq.nome} - Status: ${res.status}`);
+                            if (!res.ok) {
+                                // Tenta ler corpo do erro se possível (útil para depuração no servidor)
+                                return res.text().then(text => {
+                                     throw new Error(`Erro HTTP ${res.status} ao carregar ${arq.nome}. Resposta: ${text || '(vazia)'}`);
+                                });
+                            }
+                            return res.json();
+                        })
+                        .then(d => {
+                            console.log(`Dados recebidos de ${arq.nome}:`, d);
+                            if (!d || (typeof d === 'object' && Object.keys(d).length === 0)) {
+                                 console.warn(`Dados de ${arq.nome} estão vazios ou em formato inesperado.`);
+                                 // Considerar tratar como erro ou continuar com dados vazios?
+                                 // Por segurança, vamos lançar um erro se 'produtos' estiver faltando
+                                 if (!d.produtos) throw new Error(`Dados inválidos em ${arq.nome}: chave 'produtos' ausente.`);
+                            }
+                            dados[arq.key] = d;
+                            const infoBase = extrairInfo(arq.nome);
+                             // Adiciona RI lido do JSON (se existir)
+                             infoBase.rendimento_industrial = d.rendimento_industrial !== undefined ? parseFloat(d.rendimento_industrial) : null;
+                             if (isNaN(infoBase.rendimento_industrial)) infoBase.rendimento_industrial = null; // Garante que seja null se não for número
+
+                            if (arq.key === 'periodo1') info1 = infoBase;
+                            if (arq.key === 'periodo2') info2 = infoBase;
+                            console.log(`Informações extraídas para ${arq.key}:`, (arq.key === 'periodo1' ? info1 : info2));
+                        })
+                        .catch(err => {
+                            console.error(`Falha CRÍTICA ao carregar ou processar ${arq.nome}:`, err);
+                            // Propaga o erro para o catch geral
+                            throw new Error(`Falha ao carregar ${arq.nome}: ${err.message}`);
+                        })
+                );
+            }
+
+            await Promise.all(promessas);
+
+            // --- Exibe Resultados ---
+             if (!info1 && !info2) throw new Error("Falha crítica: Nenhuma informação de arquivo pôde ser carregada.");
+             // Verifica se os dados essenciais foram carregados
+             if (!dados.periodo1) throw new Error("Falha ao carregar dados para o período principal.");
+             if (tipoAnaliseAtual.includes('comparar_') && !dados.periodo2) throw new Error("Falha ao carregar dados para o segundo período da comparação.");
+
+
+             document.getElementById("contentArea").style.display = 'block';
+             document.querySelector('.btn-pdf-visao').style.display = 'inline-block';
+
+             if (info1 && info2) { // Modo Comparativo
+                 mostrarCabecalho(info1, info2, tipoAnaliseAtual);
+                 mostrarTabelaComparativa(dados.periodo1, info1, dados.periodo2, info2, tipoAnaliseAtual);
+                 // Análise RI é chamada dentro da mostrarTabelaComparativa/Individual agora
+             } else if (info1) { // Modo Individual
+                 mostrarCabecalho(info1);
+                 mostrarTabelaIndividual(dados.periodo1, info1);
+             } else {
+                  throw new Error("Não foi possível determinar o modo de exibição. Dados inconsistentes.");
+             }
+
+            setStatus("Dados carregados com sucesso!", 'success');
+            setTimeout(() => { setStatus("", 'info'); }, 2500); // Limpa status após sucesso
+
+        } catch (error) {
+            console.error("ERRO GERAL em carregarDadosSelecionados:", error);
+            destruirGraficos();
+            document.getElementById("contentArea").style.display = 'block';
+            document.getElementById("info").innerHTML = `❌ Erro na Operação`;
+            document.getElementById("info").style.display = 'block';
+            document.getElementById("resultado").innerHTML = `<p class="negativo" style="text-align: center; padding: 20px;">Falha ao carregar dados: ${error.message}</p>`;
+            document.querySelector('.btn-pdf-visao').style.display = 'none';
+            setStatus(`Erro: ${error.message}`, 'error');
+            // Não esconde o erro automaticamente
+        }
+    }
+
+
+    // --- Funções de Preenchimento de Seletores (mantidas, mas com processamento inicial) ---
+    function processarArquivosParaSeletores() {
+        if (_cacheSeletores.anos.length > 0) return; // Já processado
+
+        console.log("Processando arquivos para seletores...");
+        const anosSet = new Set();
+        const mesesMap = new Map(); // ano -> Map(mesNum -> mesNome)
+        const semanasMap = new Map(); // idSemana -> { texto, dataOrdenacao }
+
+        arquivosDisponiveis.forEach(nomeArquivo => {
+            const info = extrairInfo(nomeArquivo);
+            // Pular arquivos com erro na extração ou tipo N/A
+            if (!info || info.tipo === 'N/A' || info.tipo === 'Erro') {
+                // console.warn(`Arquivo ignorado para seletores (info inválida): ${nomeArquivo}`);
+                return;
+            }
+
+            if (info.tipo === 'semanal') {
+                // Usa o nome base como ID único da semana
+                const idSemana = nomeArquivo.replace('.turno1.json', '').replace('.turno2.json', '');
+                if (!semanasMap.has(idSemana) && info.periodoSemana && info.mes && info.ano) {
+                     try {
+                          const primeiroDia = parseInt(info.periodoSemana.split(' a ')[0]);
+                           // Criar data com cuidado (ano, mês-1, dia)
+                           const dataOrdenacao = new Date(Date.UTC(parseInt(info.ano), parseInt(info.mes) - 1, primeiroDia));
+                           if (isNaN(dataOrdenacao.getTime())) throw new Error("Data inválida gerada"); // Validação extra
+                           semanasMap.set(idSemana, { texto: info.tituloPeriodo, data: dataOrdenacao });
+                     } catch (e) { console.warn(`Erro ao processar data da semana '${nomeArquivo}':`, e); }
+                 }
+            } else if (info.tipo === 'mensal') {
+                 if (info.ano && info.mes) {
+                     anosSet.add(info.ano);
+                     if (!mesesMap.has(info.ano)) mesesMap.set(info.ano, new Map());
+                     if (!mesesMap.get(info.ano).has(info.mes) && info.tituloPeriodo && !info.tituloPeriodo.startsWith('Erro')) {
+                         mesesMap.get(info.ano).set(info.mes, info.tituloPeriodo.split('/')[0]);
+                     }
+                 }
+            }
+            // Não precisamos processar diários para os seletores atuais
+        });
+
+        _cacheSeletores.anos = [...anosSet].sort((a, b) => b.localeCompare(a)); // Mais recentes primeiro
+        _cacheSeletores.meses = mesesMap;
+        _cacheSeletores.semanas = [...semanasMap.entries()]
+            .sort(([, a], [, b]) => b.data - a.data) // Mais recentes primeiro (por data de início)
+            .map(([id, info]) => ({ value: id, text: info.texto }));
+
+        console.log("Cache de seletores populado:", _cacheSeletores);
+        if (_cacheSeletores.semanas.length === 0) console.warn("Nenhum arquivo semanal válido encontrado para o seletor.");
+        if (_cacheSeletores.anos.length === 0) console.warn("Nenhum arquivo mensal válido encontrado para os seletores.");
+    }
+
+    function popularSelectTurno(selectId) {
+        // (Mantida)
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        select.innerHTML = '<option value="">Selecione Turno...</option>';
+        select.innerHTML += '<option value="turno1">Turno 1 🔵</option>';
+        select.innerHTML += '<option value="turno2">Turno 2 🟢</option>';
+    }
+
+    function popularSelectSemana(selectId) {
+        // (Mantida)
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        select.innerHTML = '<option value="">Selecione Semana...</option>';
+        if (_cacheSeletores.semanas.length === 0) {
+            select.innerHTML = '<option value="">Nenhuma semana encontrada</option>';
+            return;
+        }
+        _cacheSeletores.semanas.forEach(sem => {
+            const option = document.createElement('option');
+            option.value = sem.value;
+            option.textContent = sem.text;
+            select.appendChild(option);
+        });
+    }
+
+    function popularSelectAnoMes(selectAnoId, selectMesId) {
+        // (Mantida, com addEventListener robusto)
+        const selectAno = document.getElementById(selectAnoId);
+        const selectMes = selectMesId ? document.getElementById(selectMesId) : null;
+        if (!selectAno) return;
+
+        selectAno.innerHTML = '<option value="">Selecione Ano...</option>';
+        if (_cacheSeletores.anos.length === 0) {
+             selectAno.innerHTML = '<option value="">Nenhum ano encontrado</option>';
+             if (selectMes) selectMes.innerHTML = '<option value="">Selecione o Ano</option>';
+             return;
+        }
+
+        _cacheSeletores.anos.forEach(ano => {
+            const option = document.createElement('option');
+            option.value = ano;
+            option.textContent = ano;
+            selectAno.appendChild(option);
+        });
+
+        if (selectMes) {
+            const updateMesOptions = () => {
+                 const anoSelecionado = selectAno.value;
+                 selectMes.innerHTML = '<option value="">Selecione Mês...</option>';
+                 if(anoSelecionado && _cacheSeletores.meses.has(anoSelecionado)) {
+                     const mesesDoAno = [..._cacheSeletores.meses.get(anoSelecionado).entries()]
+                         .sort(([a], [b]) => parseInt(a) - parseInt(b));
+                      if (mesesDoAno.length === 0) {
+                          selectMes.innerHTML = '<option value="">Nenhum mês neste ano</option>';
+                      } else {
+                           mesesDoAno.forEach(([mesNum, mesNome]) => {
+                              const option = document.createElement('option');
+                              option.value = mesNum;
+                              option.textContent = mesNome;
+                              selectMes.appendChild(option);
+                          });
+                      }
+                 } else if (anoSelecionado) {
+                     selectMes.innerHTML = '<option value="">Nenhum mês encontrado</option>';
+                 } else {
+                      selectMes.innerHTML = '<option value="">Selecione o Ano</option>';
+                 }
+            };
+            // Remove listener antigo se existir, antes de adicionar novo
+            selectAno.removeEventListener('change', updateMesOptions);
+            selectAno.addEventListener('change', updateMesOptions);
+            // Define estado inicial do select de mês
+             updateMesOptions(); // Chama uma vez para o estado inicial
+        }
+    }
+
+    async function iniciar() {
+        setStatus("⏳ Carregando manifesto de arquivos...", 'loading');
+        try {
+            // Forçar busca sem cache para o index.json
+            const response = await fetch("index.json?t=" + Date.now());
+            console.log("Fetch index.json status:", response.status);
+            if (!response.ok) {
+                throw new Error(`Erro ${response.status} ao carregar index.json: ${response.statusText}`);
+            }
+            const listaManifesto = await response.json();
+            console.log("Manifesto carregado:", listaManifesto);
+
+            // Validação da estrutura do manifesto
+            if (!listaManifesto || !Array.isArray(listaManifesto.arquivos)) {
+                 throw new Error("Formato inválido do index.json. Esperado: { \"arquivos\": [...] }");
+            }
+            arquivosDisponiveis = listaManifesto.arquivos;
+            console.log(`Arquivos disponíveis listados (${arquivosDisponiveis.length}):`, arquivosDisponiveis);
+
+            if (arquivosDisponiveis.length === 0) {
+                 console.warn("Nenhum arquivo listado no index.json.");
+                 // Continuar, mas seletores ficarão vazios.
+                 setStatus("Atenção: Nenhum arquivo de dados encontrado no manifesto.", 'info');
+            } else {
+                 setStatus("Manifesto carregado. Processando arquivos...", 'loading');
+            }
+
+            processarArquivosParaSeletores(); // Processa para popular o cache _cacheSeletores
+
+            // Esconde status após sucesso ou aviso
+            if (document.getElementById("status").className === 'loading' || document.getElementById("status").className === 'info') {
+                setTimeout(() => setStatus("", 'info'), 1500); // Esconde após um tempo
+            }
+             // Se houver erro antes, a mensagem de erro permanecerá visível.
+
+        } catch (error) {
+            console.error("Erro CRÍTICO ao iniciar:", error);
+            // Mostrar erro claramente para o usuário
+            setStatus(`❌ Erro crítico na inicialização: ${error.message}. Verifique o console e o arquivo index.json.`, 'error');
+            // Desabilitar funcionalidade principal se o manifesto falhar? Ou deixar tentar?
+            // Por enquanto, deixamos tentar, mas com a mensagem de erro visível.
+        }
+    }
+
+    // --- Função de Exportação PDF (mantida) ---
+    async function exportarPDF_VisaoAtual() {
+        const elementToCapture = document.getElementById('contentArea');
+        const infoDiv = document.getElementById('info');
+        if (!elementToCapture || !infoDiv) {
+             alert("Erro: Elementos necessários para gerar PDF não encontrados.");
+             return;
+        }
+        const pdfButton = document.querySelector('.btn-pdf-visao');
+        const originalPdfButtonDisplay = pdfButton ? pdfButton.style.display : '';
+        const originalChartAnimation = Chart.defaults.animation.duration;
+
+        setStatus("Gerando PDF...", 'loading');
+        if (pdfButton) pdfButton.style.display = 'none';
+        Chart.defaults.animation.duration = 0;
+
+        const charts = [graficoPrincipalInstancia, graficoRIInstancia, graficoDiferencaInstancia];
+        charts.forEach(chart => { if (chart) chart.update('none'); });
+
+        const titleElement = document.createElement('div');
+        titleElement.innerHTML = infoDiv.innerHTML;
+        titleElement.className = 'info';
+        titleElement.style.display = 'block';
+        elementToCapture.insertBefore(titleElement, elementToCapture.firstChild);
+
+        await new Promise(resolve => setTimeout(resolve, 200)); // Aumentar ligeiramente o delay
+
+        const infoTextContent = infoDiv.textContent || 'Visao_Atual';
+        const filename = `relatorio_${infoTextContent.substring(0, 50).replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'relatorio'}.pdf`;
+
+        const opt = {
+          margin:       [0.4, 0.4, 0.4, 0.4],
+          filename:     filename,
+          image:        { type: 'jpeg', quality: 0.97 },
+          html2canvas:  { scale: 2, useCORS: true, logging: false },
+          jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' },
+          pagebreak:    { mode: ['css', 'avoid-all'], avoid: ['.chart-container', '.summary-section', 'tr', 'h4', '.info'] }
+        };
+
+        try {
+            console.log(`Gerando PDF: ${filename}`);
+            await html2pdf().from(elementToCapture).set(opt).save();
+            setStatus("PDF gerado com sucesso!", 'success');
+            console.log("PDF gerado com sucesso.");
+        } catch (error) {
+            console.error("Erro ao gerar PDF:", error);
+            setStatus("Ocorreu um erro ao gerar o PDF.", 'error');
+            alert("Ocorreu um erro ao gerar o PDF. Verifique o console.");
+        } finally {
+            if (elementToCapture.contains(titleElement)) {
+                 elementToCapture.removeChild(titleElement);
+            }
+            if (pdfButton) pdfButton.style.display = originalPdfButtonDisplay;
+            Chart.defaults.animation.duration = originalChartAnimation;
+            charts.forEach(chart => { if (chart) chart.update(); });
+            console.log("Limpeza pós-PDF concluída.");
+             if (document.getElementById("status").className === 'success') {
+                  setTimeout(() => setStatus("", 'info'), 1500);
+             }
+        }
+    }
+
+    // --- Inicia a aplicação ---
+    window.onload = iniciar;
+
+</script>
