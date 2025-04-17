@@ -1,0 +1,2046 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 Análise de Rendimento Fabril</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.0.0/chartjs-plugin-datalabels.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.min.js"></script>
+    <style>
+        /* Define color palette using CSS variables */
+        :root {
+            --primary-bg: #f8f9fa; /* Very light grey */
+            --secondary-bg: #ffffff;
+            --header-bg: #e9ecef; /* Light grey */
+            --table-header-bg: #dee2e6; /* Slightly darker grey */
+            --border-color: #ced4da; /* Medium grey */
+            --text-color: #212529; /* Dark grey */
+            --positive: #28a745; /* Green */
+            --negative: #dc3545; /* Red */
+            --na-meta: #6c757d; /* Grey or Neutral */
+            --primary-blue: #007bff;
+            --primary-green: #28a745;
+            --primary-orange: #fd7e14;
+            --primary-purple: #6f42c1;
+            --primary-grey: #6c757d;
+
+             /* Button Colors */
+            --btn-day-turno: #ffc107; /* Yellow */
+            --btn-day-turno-hover: #d39e00;
+            --btn-month-turno: #17a2b8; /* Cyan */
+            --btn-month-turno-hover: #138496;
+            --btn-yoy-month: #dc3545; /* Red */
+            --btn-yoy-month-hover: #c82333;
+
+             /* Chart Colors */
+            --chart-meta: #ffc107; /* Yellow */
+            --chart-t1: #007bff; /* Blue */
+            --chart-t2: #28a745; /* Green */
+            --chart-period1: #007bff; /* Blue */
+            --chart-period2: #6f42c1; /* Purple */
+            --chart-yoy-year1: #17a2b8; /* Cyan */
+            --chart-yoy-year2: #dc3545; /* Red */
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--primary-bg);
+            color: var(--text-color);
+            line-height: 1.6;
+            font-size: 1rem; /* Base font size */
+        }
+        .container {
+            max-width: 1400px; /* Slightly wider container */
+            margin: 20px auto;
+            padding: 25px; /* More padding */
+            background-color: var(--secondary-bg);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1); /* Stronger shadow */
+            border-radius: 10px; /* More rounded corners */
+        }
+        h1 {
+            text-align: center;
+            color: var(--primary-blue);
+            margin-bottom: 35px; /* More space below title */
+            page-break-after: avoid;
+            font-size: 2.2em; /* Larger title */
+            font-weight: 700;
+        }
+        .menu, .acoes {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .menu-section {
+            margin-bottom: 25px; /* More space between sections */
+            padding-bottom: 25px;
+            border-bottom: 1px solid var(--border-color);
+        }
+         .menu-section:last-child {
+             border-bottom: none;
+             margin-bottom: 0;
+             padding-bottom: 0;
+         }
+         .menu-section h3 {
+            margin-bottom: 15px;
+            color: var(--primary-grey);
+            font-size: 1.35em; /* Slightly larger */
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+         }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px; /* Slightly larger font */
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            transition: background-color 0.3s ease, opacity 0.3s ease;
+            vertical-align: middle;
+            min-width: 130px; /* Give buttons a minimum width */
+            font-weight: 500;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        button:hover { opacity: 0.9; filter: brightness(1.05); } /* Gentle brightness change on hover */
+        button:active { filter: brightness(0.9); } /* Darken on press */
+        button:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+        /* Button Styles (using CSS variables) */
+        .btn-turno1 { background-color: var(--primary-blue); }
+        .btn-turno2 { background-color: var(--primary-green); }
+        .btn-comparar-t1t2 { background-color: var(--primary-orange); }
+        .btn-semanal { background-color: var(--primary-purple); }
+        .btn-mensal { background-color: #0d6efd; } /* Darker Blue */
+
+        /* New Comparison Buttons */
+        .btn-comparar-dia-turno { background-color: var(--btn-day-turno); color: var(--text-color); }
+        .btn-comparar-mes-turno { background-color: var(--btn-month-turno); }
+        .btn-comparar-mes-yoy { background-color: var(--btn-yoy-month); }
+
+        .btn-pdf { background-color: var(--negative); }
+        .btn-voltar { background-color: var(--primary-grey); }
+
+        #seletorPeriodo {
+             text-align: center;
+             margin-bottom: 30px; /* More space below selector */
+             padding: 25px;
+             background-color: var(--header-bg);
+             border-radius: 8px;
+             box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        }
+        #seletorPeriodo h4 {
+            margin-top: 0;
+            color: var(--text-color);
+            font-size: 1.2em; /* Larger title */
+            font-weight: 600;
+            margin-bottom: 20px; /* More space below title */
+        }
+        .select-group {
+            display: inline-block;
+            margin: 0 15px 20px; /* Added bottom margin */
+            vertical-align: top; /* Align items nicely */
+            text-align: left; /* Align labels/inputs within the group */
+        }
+        .select-group label {
+            display: block; /* Label above input */
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: var(--primary-grey);
+            font-size: 0.95em; /* Slightly larger */
+        }
+        .select-group select,
+        .select-group input[type="date"],
+         .select-group input[type="number"] { /* Added number for YoY selector */
+             padding: 8px 12px;
+             border: 1px solid var(--border-color);
+             border-radius: 4px;
+             font-size: 1em; /* Standard font size */
+             min-width: 160px; /* Consistent width */
+             box-sizing: border-box; /* Include padding in width */
+             background-color: #fff;
+         }
+         .select-group button {
+             margin-top: 10px; /* Space after inputs */
+             display: block; /* Button on its own line */
+             margin-left: auto;
+             margin-right: auto;
+         }
+         .select-group .date-month-inputs {
+              display: flex; /* Arrange date/month selectors in a row */
+              gap: 10px; /* Space between them */
+         }
+          .select-group .date-month-inputs select {
+               flex-grow: 1; /* Allow month/year selects to grow */
+          }
+
+
+        .info {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 25px; /* More space below info */
+            padding: 15px;
+            background-color: var(--header-bg);
+            border-radius: 5px;
+            text-align: center;
+            page-break-after: avoid;
+             border-left: 6px solid var(--primary-blue); /* Thicker border */
+             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .info .sub-info {
+            display: block;
+            font-size: 0.9em;
+            font-weight: normal;
+            color: var(--primary-grey);
+            margin-top: 8px; /* More space */
+        }
+
+        #status {
+            text-align: center;
+            font-style: italic;
+            color: var(--primary-grey);
+            margin: 20px;
+            min-height: 1.5em; /* Prevent layout shift */
+        }
+
+        .content-area {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            margin-top: 20px;
+            position: relative;
+        }
+
+        /* Rendimento Industrial Section */
+        .industrial-yield-section {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #eef; /* Light blue background */
+            border: 1px solid #d0dce7;
+            border-radius: 5px;
+            margin-bottom: 30px;
+            page-break-inside: avoid !important;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .industrial-yield-section h4 {
+            margin-top: 0;
+            color: var(--primary-blue);
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            border-bottom: 1px dashed var(--border-color);
+            padding-bottom: 10px;
+        }
+         .yield-summary {
+             display: grid;
+             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* Responsive grid */
+             gap: 20px; /* Increased gap */
+             margin-bottom: 20px;
+             align-items: start; /* Align items to the top */
+         }
+         .yield-item {
+             background-color: #fff;
+             padding: 15px;
+             border-left: 5px solid; /* Thicker border */
+             border-radius: 4px;
+             font-size: 0.95em;
+             box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+         }
+          .yield-item.meta { border-color: var(--chart-meta); }
+          .yield-item.periodo-1 { border-color: var(--chart-period1); } /* Use chart colors */
+          .yield-item.periodo-2 { border-color: var(--chart-period2); }
+           .yield-item.yoy-year1 { border-color: var(--chart-yoy-year1); }
+           .yield-item.yoy-year2 { border-color: var(--chart-yoy-year2); }
+
+          .yield-item strong { display: block; margin-bottom: 5px; font-size: 1.1em; color: var(--text-color); }
+          .yield-item span { color: var(--primary-grey); font-size: 0.9em;} /* Description */
+          .yield-item .value { font-size: 1.3em; font-weight: bold; margin: 5px 0;} /* Larger value */
+          .yield-item .diff { font-size: 1em; font-weight: bold; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-color);} /* Separator for diff */
+          .yield-item .diff.positive { color: var(--positive); }
+          .yield-item .diff.negative { color: var(--negative); }
+          .yield-item .diff.na-meta { color: var(--na-meta); }
+
+
+        table {
+            margin: 20px auto;
+            border-collapse: separate; /* Use separate to allow border-radius on rows */
+            border-spacing: 0;
+            width: 100%;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+            overflow: hidden; /* Apply radius to children */
+            font-size: 0.9em;
+            page-break-inside: auto; /* Allow breaks if necessary */
+        }
+        thead th {
+             background-color: var(--table-header-bg);
+             font-weight: bold;
+             text-transform: uppercase;
+             font-size: 0.85em; /* Slightly larger font in header */
+             letter-spacing: 0.05em;
+             white-space: nowrap;
+         }
+         th, td {
+            border: 1px solid var(--border-color);
+            padding: 12px 15px; /* Increased padding */
+            text-align: left;
+            vertical-align: middle;
+         }
+
+        tbody tr:nth-child(odd) { background-color: #f9f9f9; } /* Zebra striping */
+        tbody tr:hover { background-color: #e9e9e9; } /* Hover effect */
+
+        .positivo { color: var(--positive); font-weight: bold; }
+        .negativo { color: var(--negative); font-weight: bold; }
+        .na-meta { color: var(--na-meta); }
+        .melhor-turno { font-weight: bold; } /* Applied to the winner cell */
+
+        .summary {
+            margin-top: 30px; /* More space above summary */
+            padding: 20px; /* More padding */
+            background-color: #eef;
+            border-left: 6px solid var(--primary-blue); /* Thicker border */
+            border-radius: 4px;
+            font-size: 1em; /* Standard font size */
+            page-break-before: auto;
+            page-break-inside: avoid !important;
+            line-height: 1.8; /* Better line spacing */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+         .summary strong { color: var(--primary-blue); font-size: 1.1em; }
+
+        .chart-container {
+             position: relative;
+             margin: auto;
+             margin-top: 30px;
+             height: 50vh; /* Increased height */
+             width: 98%; /* Slightly wider */
+             background: #fff;
+             padding: 20px; /* More padding */
+             border-radius: 8px; /* More rounded corners */
+             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+             display: block !important; /* Ensure visibility for PDF */
+             page-break-inside: avoid !important;
+             page-break-before: auto;
+             overflow: hidden; /* Hide potential overflows during render */
+        }
+         /* Specific height for yield chart if needed */
+         #graficoRendimentoIndustrialContainer {
+             height: 35vh;
+         }
+
+
+        canvas {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            width: auto !important; /* Allow Chart.js to size */
+            height: auto !important; /* Allow Chart.js to size */
+        }
+
+        .acoes-visao {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+            page-break-before: avoid;
+        }
+
+        /* Styles specifically for PDF generation */
+        @media print {
+           body {
+               -webkit-print-color-adjust: exact !important;
+               color-adjust: exact !important;
+               font-size: 9pt; /* Smaller font for print */
+           }
+           .container { box-shadow: none; border: none; margin: 0; max-width: 100%; padding: 0; }
+           button, .menu, .acoes, #seletorPeriodo { display: none !important; } /* Hide UI elements */
+           .content-area { box-shadow: none; border: none; padding: 0; margin: 0; }
+           .chart-container { height: 30vh; width: 100%; padding: 5px; margin-top: 15px; } /* Adjust chart size for print */
+           #graficoRendimentoIndustrialContainer { height: 25vh; }
+           .chart-container, .summary, tr, .industrial-yield-section { page-break-inside: avoid !important; }
+           .industrial-yield-section { margin-bottom: 15px; padding: 10px; }
+           .industrial-yield-section h4 { margin-bottom: 10px; padding-bottom: 5px; }
+           .yield-summary { gap: 10px; margin-bottom: 10px; }
+           .yield-item { padding: 8px; border-left-width: 3px; }
+           .yield-item strong { font-size: 1em; margin-bottom: 3px; }
+           .yield-item span { font-size: 0.8em; }
+           .yield-item .value { font-size: 1.1em; margin: 3px 0; }
+           .yield-item .diff { font-size: 0.9em; margin-top: 5px; padding-top: 5px;}
+
+           h1, .info { page-break-after: avoid; margin-bottom: 10px; font-size: 1.5em;}
+           .info .sub-info { font-size: 0.8em; margin-top: 5px; }
+           table { font-size: 9pt; }
+           th, td { padding: 8px 10px; }
+           .acoes-visao { display: none !important; } /* Hide PDF button in print */
+
+            /* Ensure Charts Print Correctly - might need browser settings (Print background graphics) */
+            canvas { display: block !important; }
+
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Análise de Rendimento Fabril</h1>
+
+        <div class="menu">
+             <div class="menu-section">
+                <h3>Visão Individual</h3>
+                <button class="btn-turno1" onclick="selecionarPeriodo('diario1')">🔵 Diário T1</button>
+                <button class="btn-turno2" onclick="selecionarPeriodo('diario2')">🟢 Diário T2</button>
+                <button class="btn-semanal" onclick="selecionarPeriodo('semanal1')">🟣 Semanal T1</button>
+                <button class="btn-semanal" onclick="selecionarPeriodo('semanal2')">🟣 Semanal T2</button>
+                <button class="btn-mensal" onclick="selecionarPeriodo('mensal1')">🟦 Mensal T1</button>
+                <button class="btn-mensal" onclick="selecionarPeriodo('mensal2')">🟩 Mensal T2</button>
+            </div>
+             <div class="menu-section">
+                 <h3>Comparar Turnos (Mesmo Período)</h3>
+                 <button class="btn-comparar-t1t2" onclick="selecionarPeriodo('comparar_dia_t1t2')">🟠 Comparar Dia (T1 vs T2)</button>
+                 <button class="btn-comparar-t1t2" onclick="selecionarPeriodo('comparar_semana_t1t2')">🟠 Comparar Semana (T1 vs T2)</button>
+                 <button class="btn-comparar-t1t2" onclick="selecionarPeriodo('comparar_mes_t1t2')">🟠 Comparar Mês (T1 vs T2)</button>
+            </div>
+             <div class="menu-section">
+                 <h3>Comparar Períodos (Mesmo Turno)</h3>
+                 <button class="btn-comparar-dia-turno" onclick="selecionarPeriodo('comparar_dois_dias_turno')">🟡 Comparar Dois Dias</button>
+                 <button class="btn-comparar-mes-turno" onclick="selecionarPeriodo('comparar_dois_meses_turno')">🔵 Comparar Dois Meses</button>
+            </div>
+            <div class="menu-section">
+                 <h3>Análise Anual</h3>
+                 <button class="btn-comparar-mes-yoy" onclick="selecionarPeriodo('comparar_mes_yoy')">🔴 Comparar Mês YoY</button>
+            </div>
+        </div>
+
+        <!-- Área de Seleção de Período (Inicialmente Oculta) -->
+        <div id="seletorPeriodo" style="display:none;">
+             <h4>Selecione o Período para <span id="tipoAnaliseSelecionada">Análise</span>:</h4>
+
+             <!-- Selectors for a single period (Diário, Semanal, Mensal, Comparar T1 vs T2) -->
+             <div id="seletorSinglePeriod" class="select-group" style="display:none;">
+                 <div id="inputDataGroup" style="display:none;">
+                     <label for="inputData">Data:</label>
+                     <input type="date" id="inputData" name="inputData">
+                 </div>
+                 <div id="selectSemanaGroup" style="display:none;">
+                     <label for="selectSemana">Semana:</label>
+                     <select id="selectSemana">
+                         <option value="">Carregando...</option>
+                     </select>
+                 </div>
+                 <div id="selectMesAnoGroup" style="display:none;">
+                      <label for="selectAno">Ano:</label>
+                      <select id="selectAno">
+                           <option value="">Carregando...</option>
+                      </select>
+                      <label for="selectMes">Mês:</label>
+                      <select id="selectMes">
+                           <option value="">Selecione o Ano</option>
+                      </select>
+                 </div>
+             </div>
+
+             <!-- Selectors for two periods (Comparar Dois Dias/Meses Turno) -->
+             <div id="seletorDualPeriod" style="display:none; flex-wrap: wrap; justify-content: center; gap: 20px;">
+                 <div id="seletorPeriodo1" class="select-group">
+                     <label id="labelPeriodo1">Período 1:</label>
+                     <div class="date-month-inputs">
+                         <input type="date" id="inputData1" style="display:none;">
+                         <select id="selectAno1" style="display:none;"></select>
+                         <select id="selectMes1" style="display:none;"></select>
+                     </div>
+                 </div>
+                 <div id="seletorPeriodo2" class="select-group">
+                     <label id="labelPeriodo2">Período 2:</label>
+                      <div class="date-month-inputs">
+                         <input type="date" id="inputData2" style="display:none;">
+                         <select id="selectAno2" style="display:none;"></select>
+                         <select id="selectMes2" style="display:none;"></select>
+                     </div>
+                 </div>
+                 <div id="seletorTurnoComparacao" class="select-group" style="display:none;">
+                      <label for="selectTurno">Turno:</label>
+                      <select id="selectTurno">
+                          <option value="">Selecione</option>
+                          <option value="turno1">Turno 1</option>
+                          <option value="turno2">Turno 2</option>
+                      </select>
+                 </div>
+             </div>
+
+             <!-- Selectors for YoY (Month/Year + optional Turno/Total) -->
+             <div id="seletorYoY" style="display:none; flex-wrap: wrap; justify-content: center; gap: 20px;">
+                  <div id="selectYoYMonthYearGroup" class="select-group">
+                       <label for="selectYoYAno">Ano Base:</label>
+                       <select id="selectYoYAno">
+                            <option value="">Carregando...</option>
+                       </select>
+                       <label for="selectYoYMes">Mês:</label>
+                       <select id="selectYoYMes">
+                           <option value="">Selecione o Ano</option>
+                       </select>
+                  </div>
+                   <div id="selectYoYComparisonType" class="select-group">
+                       <label for="selectYoYTurno">Comparar:</label>
+                       <select id="selectYoYTurno">
+                           <option value="total">Total (T1 + T2)</option>
+                           <option value="turno1">Apenas Turno 1</option>
+                           <option value="turno2">Apenas Turno 2</option>
+                       </select>
+                  </div>
+             </div>
+
+             <button class="btn-turno1" onclick="carregarDadosSelecionados()">Carregar Dados</button>
+             <button class="btn-voltar" onclick="cancelarSelecao()">Cancelar</button>
+        </div>
+
+        <div id="info" class="info" style="display:none;"></div>
+        <div id="status">⏳ Carregando manifesto de arquivos...</div>
+        <div class="acoes">
+             <button class="btn-voltar voltar" onclick="voltarMenu()" style="display:none;">🔙 Voltar ao Menu Principal</button>
+        </div>
+
+        <div class="content-area" id="contentArea" style="display:none;">
+             <!-- Industrial Yield Analysis Section (will be populated by JS for monthly/YoY) -->
+             <div id="industrialYieldAnalysis" class="industrial-yield-section" style="display:none;">
+                  <h4>Análise de Rendimento Industrial (%)</h4>
+                  <div id="yieldSummary" class="yield-summary">
+                       <!-- Summary items populated here -->
+                  </div>
+                  <div id="graficoRendimentoIndustrialContainer" class="chart-container" style="display:none;">
+                        <canvas id="graficoRendimentoIndustrial"></canvas>
+                   </div>
+             </div>
+
+            <!-- Result Table and Summary -->
+            <div id="resultado"></div> <!-- Table and Summary here -->
+
+            <!-- Chart Containers -->
+            <div id="graficoIndividualContainer" class="chart-container" style="display:none;">
+                 <canvas id="graficoIndividual"></canvas>
+            </div>
+            <div id="graficoComparativoContainer" class="chart-container" style="display:none;">
+                 <canvas id="graficoComparativo"></canvas>
+            </div>
+
+
+             <!-- Actions specific to the current view -->
+             <div class="acoes-visao">
+                 <button class="btn-pdf btn-pdf-visao" onclick="exportarPDF_VisaoAtual()" style="display:none;">📄 Exportar Esta Visão em PDF</button>
+             </div>
+        </div>
+
+    </div>
+
+<script>
+    // Registrar o plugin DataLabels
+    Chart.register(ChartDataLabels);
+
+    const META_RENDIMENTO_INDUSTRIAL = 81.600; // Meta fixa em porcentagem
+
+    let arquivosDisponiveis = []; // Lista de TODOS os nomes de arquivos do index.json
+    let infoArquivos = []; // Lista de objetos { nome, tipo, data, turno, mes, ano, ... } gerados de extrairInfo
+    let tipoAnaliseAtual = null; // Guarda o tipo de análise selecionado (ex: 'diario1', 'comparar_dois_dias_turno')
+    let dadosVisaoAtual = {}; // Armazena dados carregados para a visão ATUAL, organizado por chave (ex: 'periodo1', 'periodo2', 'yoy2024', 'yoy2025')
+
+    let graficoComparativoInstancia = null;
+    let graficoIndividualInstancia = null;
+    let graficoRendimentoIndustrialInstancia = null;
+
+    // --- Funções Utilitárias ---
+
+    // Helper para destruir gráficos
+    function destruirGraficos() {
+        if (graficoComparativoInstancia) { graficoComparativoInstancia.destroy(); graficoComparativoInstancia = null; }
+        if (graficoIndividualInstancia) { graficoIndividualInstancia.destroy(); graficoIndividualInstancia = null; }
+        if (graficoRendimentoIndustrialInstancia) { graficoRendimentoIndustrialInstancia.destroy(); graficoRendimentoIndustrialInstancia = null; }
+        document.getElementById("graficoComparativoContainer").style.display = "none";
+        document.getElementById("graficoIndividualContainer").style.display = "none";
+        document.getElementById("graficoRendimentoIndustrialContainer").style.display = "none";
+    }
+
+     // Helper para formatar data para exibição (input: DD/MM/YYYY ou MM/YYYY)
+     function formatarDataParaExibicao(dataString) {
+          if (!dataString || dataString === 'N/A') return 'N/A';
+          const parts = dataString.split('/');
+          if (parts.length === 3) { // Assume DD/MM/YYYY or DD/MM/YY
+               const dia = parts[0];
+               const mes = parts[1];
+               let ano = parts[2];
+               if (ano.length === 2) ano = '20' + ano; // Convert YY to YYYY
+               return `${dia}/${mes}/${ano}`; // Ensure YYYY
+          } else if (parts.length === 2) { // Assume MM/YYYY or MM/YY
+              const mes = parts[0];
+              let ano = parts[1];
+               if (ano.length === 2) ano = '20' + ano; // Convert YY to YYYY
+              try {
+                const nomeMes = new Date(parseInt(ano), parseInt(mes) - 1, 1).toLocaleString('pt-BR', { month: 'long' });
+                return `${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)}/${ano}`; // Month Name / YYYY
+              } catch(e) {
+                 return `${mes}/${ano}`; // Fallback MM/YYYY
+              }
+          }
+          return dataString; // Return original if format is unexpected
+     }
+
+
+    // Extrair info do nome do arquivo (MELHORADA)
+    function extrairInfo(nomeArquivo) {
+         if (!nomeArquivo || typeof nomeArquivo !== 'string') return { nome: 'N/A', tipo: 'N/A', diaSemana: 'N/A', data: 'N/A', turno: 'N/A', mes: 'N/A', ano: 'N/A', tituloPeriodo: 'N/A', periodoSemana: 'N/A', idBase: 'N/A' };
+
+         const partes = nomeArquivo.replace('.json', '').split('.');
+         let tipo = 'N/A', turno = 'N/A', diaSemana = 'N/A', data = 'N/A', tituloPeriodo = 'N/A', mes = 'N/A', anoCurto = 'N/A', anoCompleto = 'N/A', periodoSemana = 'N/A', idBase = nomeArquivo.replace('.json', ''); // Default idBase
+
+         // Tenta identificar o turno primeiro
+         const turnoPart = partes.find(p => p.startsWith('turno'));
+         if (turnoPart) {
+              turno = turnoPart.charAt(0).toUpperCase() + turnoPart.slice(1); // Ex: "turno1" -> "Turno1" (will become "Turno 1")
+         } else {
+             // Handle cases where turn might be inferred or not present (e.g., aggregated)
+             // For now, assume turn is always in filename unless it's a future aggregated type
+         }
+         // Clean up turno format
+         if (turno === 'Turno1') turno = 'Turno 1';
+         if (turno === 'Turno2') turno = 'Turno 2';
+
+
+         if (partes[0] === "semana" && partes.length >= 5) { // Ex: semana.08a12.04.25.turno1.json
+             tipo = "semanal";
+             periodoSemana = partes[1]; // "08a12"
+             mes = partes[2].padStart(2, '0'); // "04" -> "04"
+             anoCurto = partes[3]; // "25"
+             anoCompleto = "20" + anoCurto;
+             try {
+                  const nomeMes = new Date(parseInt(anoCompleto), parseInt(mes) - 1, 1).toLocaleString('pt-BR', { month: 'long' });
+                  tituloPeriodo = `Semana ${periodoSemana.replace('a', ' a ')}/${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)}/${anoCompleto}`;
+             } catch(e) {
+                  tituloPeriodo = `Semana ${periodoSemana.replace('a', ' a ')}/${mes}/${anoCompleto}`; // Fallback
+             }
+             data = `${mes}/${anoCompleto}`; // Para agrupamento/identificação mensal (MM/YYYY)
+             idBase = `semana.${periodoSemana}.${mes}.${anoCurto}`; // Base filename without turn/ext
+         } else if (partes[0] === "mensal" && partes.length >= 4) { // Ex: mensal.04.25.turno1.json
+             tipo = "mensal";
+             mes = partes[1].padStart(2, '0'); // "04" -> "04"
+             anoCurto = partes[2]; // "25"
+             anoCompleto = "20" + anoCurto;
+             try {
+                  const nomeMes = new Date(parseInt(anoCompleto), parseInt(mes) - 1, 1).toLocaleString('pt-BR', { month: 'long' });
+                  tituloPeriodo = `${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)}/${anoCompleto}`; // Month Name / YYYY
+             } catch(e) {
+                  tituloPeriodo = `Mês ${mes}/${anoCompleto}`; // Fallback MM/YYYY
+             }
+             data = `${mes}/${anoCompleto}`; // Para identificação interna/agrupamento (MM/YYYY)
+             idBase = `mensal.${mes}.${anoCurto}`; // Base filename without turn/ext
+         } else if (partes.length >= 5) { // Assume diário Ex: segunda.feira.14.04.25.turno1.json ou terca.15.04.25.turno1.json
+              tipo = "diario";
+              let diaNomeRaw = partes[0];
+              let offset = 0;
+              if (partes[1] === "feira") {
+                  diaNomeRaw += "." + partes[1]; // Reconstruct "segunda.feira"
+                  diaSemana = diaNomeRaw.replace('.', '-').replace(/\b\w/g, l => l.toUpperCase()); // segunda-feira -> Segunda-feira
+                  offset = 1;
+              } else {
+                  diaSemana = diaNomeRaw.charAt(0).toUpperCase() + diaNomeRaw.slice(1); // terca -> Terca
+              }
+              const diaNum = partes[1 + offset].padStart(2, '0'); // "14" -> "14"
+              mes = partes[2 + offset].padStart(2, '0'); // "04" -> "04"
+              anoCurto = partes[3 + offset]; // "25"
+              anoCompleto = "20" + anoCurto;
+              data = `${diaNum}/${mes}/${anoCompleto}`; // DD/MM/YYYY
+              tituloPeriodo = `${diaSemana}, ${data}`;
+              idBase = partes.slice(0, 4 + offset).join('.'); // Base filename part
+         }
+
+         // Use 'N/A' for turno if not found
+         if (!turnoPart) turno = 'N/A';
+
+         return { nome: nomeArquivo, tipo, diaSemana, data, turno, mes, ano: anoCompleto, periodoSemana, tituloPeriodo, idBase };
+    }
+
+    // Configurações comuns para gráficos
+    function commonChartOptions(titleText, isPercentage = true) {
+        const options = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top', labels: { font: { size: 12 } } },
+                title: { display: true, text: titleText, font: { size: 16, weight: 'bold' } },
+                 datalabels: { // Optional: Add datalabels plugin config
+                     display: 'auto', // Only show if there's space
+                     color: '#333',
+                     anchor: 'end',
+                     align: 'top',
+                     offset: 4,
+                     font: { weight: 'bold', size: 10 },
+                     formatter: function(value, context) {
+                          if (isNaN(value) || value === null) return '';
+                           // Hide very small values to avoid clutter
+                          if (isPercentage && Math.abs(value) < 0.1 && value !== 0) return '';
+                          if (!isPercentage && Math.abs(value) < 1 && value !== 0) return ''; // For Kg/Cx, hide small diffs
+                          return isPercentage ? value.toFixed(1) + '%' : value.toFixed(0); // Show 1 decimal for %, 0 for others
+                     }
+                 },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) { label += ': '; }
+                            if (context.parsed.y !== null && !isNaN(context.parsed.y)) {
+                                label += isPercentage ? context.parsed.y.toFixed(3) + '%' : context.parsed.y.toFixed(2);
+                            } else {
+                                label += 'N/D';
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                     ticks: { callback: function(value) { return isPercentage ? value + '%' : value; } },
+                    title: { display: true, text: isPercentage ? 'Percentual (%)' : 'Valor', font: { size: 12 } }
+                },
+                x: { ticks: { autoSkip: false, maxRotation: 70, minRotation: 0, font: { size: 10 } } }
+            },
+            animation: { duration: 500 } // Manter alguma animação fora do PDF
+        };
+        // Disable datalabels on lines if any combined chart is used later
+         if (options.plugins.datalabels && options.type === 'line') {
+             options.plugins.datalabels.display = false;
+         }
+         return options;
+    }
+
+
+    // --- Funções de Exibição ---
+    function mostrarCabecalho(tituloPrincipal, subtitulo = null) {
+        const div = document.getElementById("info");
+        let html = tituloPrincipal;
+        if (subtitulo) {
+             html += `<span class="sub-info">${subtitulo}</span>`;
+        }
+        div.innerHTML = html;
+        div.style.display = 'block';
+    }
+
+     function mostrarStatus(mensagem, isError = false) {
+        const statusDiv = document.getElementById("status");
+        statusDiv.innerHTML = mensagem;
+        statusDiv.style.color = isError ? "var(--negative)" : "var(--primary-grey)";
+        statusDiv.style.display = 'block';
+         if (!isError) console.log(mensagem);
+         else console.error(mensagem);
+     }
+
+     function esconderStatus() {
+          document.getElementById("status").style.display = 'none';
+     }
+
+
+     function mostrarRendimentoIndustrial(yieldData) {
+         const yieldSection = document.getElementById('industrialYieldAnalysis');
+         const yieldSummaryDiv = document.getElementById('yieldSummary');
+         yieldSummaryDiv.innerHTML = ''; // Clear previous summary items
+
+         yieldSection.style.display = 'block';
+
+         // Data points for the chart
+         const chartLabels = [];
+         const chartData = [];
+         const chartColors = [];
+
+         // Sort yield data: Meta first, then chronological by label (assuming labels contain year)
+         yieldData.sort((a, b) => {
+             if (a.key === 'meta') return -1; // Meta always first
+             if (b.key === 'meta') return 1;
+             // Try sorting by year from label (e.g., "Abril/2024")
+             const yearA = parseInt(a.label?.split('/').pop());
+             const yearB = parseInt(b.label?.split('/').pop());
+             if (!isNaN(yearA) && !isNaN(yearB)) {
+                 return yearA - yearB;
+             }
+             // Fallback to label string comparison if year not found (e.g., "Turno 1" vs "Turno 2")
+             return a.label.localeCompare(b.label);
+         });
+
+
+         yieldData.forEach((period) => {
+             if (period.yield !== undefined && period.yield !== null) {
+                 chartLabels.push(period.label);
+                 chartData.push(period.yield);
+                 chartColors.push(getBarColor(period.key)); // Use key for color logic
+
+                 const periodItem = document.createElement('div');
+                 periodItem.className = `yield-item ${period.key}`; // Add key as class
+
+                 let diffVsMeta = 'N/A';
+                 let diffVsMetaClass = 'na-meta';
+                 if (period.key !== 'meta') { // Don't calculate diff vs meta for meta itself
+                     const diff = period.yield - META_RENDimento_INDUSTRIAL;
+                     diffVsMeta = `${diff >= 0 ? '+' : ''}${diff.toFixed(3)}% vs Meta`;
+                     diffVsMetaClass = Math.abs(diff) < 0.001 ? 'na-meta' : (diff > 0 ? 'positivo' : 'negativo');
+                 }
+
+
+                  let comparisonHtml = '';
+                  // Find the *previous* period in the sorted list (excluding meta) for comparison diff
+                  const sortedPeriodsOnly = yieldData.filter(item => item.key !== 'meta');
+                  const currentIndex = sortedPeriodsOnly.findIndex(item => item.key === period.key && item.label === period.label); // Find this period in the sorted list
+                  if (currentIndex > 0) { // If not the first period (and not meta)
+                       const previousPeriod = sortedPeriodsOnly[currentIndex - 1];
+                       if (previousPeriod && previousPeriod.yield !== undefined && previousPeriod.yield !== null) {
+                           const diff = period.yield - previousPeriod.yield;
+                           const diffClass = Math.abs(diff) < 0.001 ? 'na-meta' : (diff > 0 ? 'positivo' : 'negativo');
+                           comparisonHtml = `<div class="diff ${diffClass}">${diff >= 0 ? '+' : ''}${diff.toFixed(3)}% vs ${previousPeriod.label}</div>`;
+                       }
+                  }
+
+
+                 periodItem.innerHTML = `
+                      <strong>${period.label}</strong>
+                      <span>Rendimento Realizado</span>
+                      <div class="value">${period.yield !== undefined && period.yield !== null ? period.yield.toFixed(3) + '%' : 'N/D'}</div>
+                      <div class="diff ${diffVsMetaClass}">${diffVsMeta}</div>
+                      ${comparisonHtml}
+                 `;
+                 yieldSummaryDiv.appendChild(periodItem);
+             }
+         });
+
+         // Remove Meta from chart data if only showing meta
+         if (chartLabels.length === 1 && chartLabels[0] === 'Meta') {
+              document.getElementById("graficoRendimentoIndustrialContainer").style.display = "none";
+         } else {
+              // Desenhar Gráfico de Rendimento Industrial
+              const ctx = document.getElementById('graficoRendimentoIndustrial').getContext('2d');
+              if (graficoRendimentoIndustrialInstancia) { graficoRendimentoIndustrialInstancia.destroy(); }
+              document.getElementById("graficoRendimentoIndustrialContainer").style.display = "block";
+
+               // Find the main comparison label for the chart title
+              let chartTitle = 'Comparativo de Rendimento Industrial';
+               if(chartLabels.length === 2 && chartLabels[0] !== 'Meta') chartTitle = `Comparativo de Rendimento Industrial: ${chartLabels[0]} vs ${chartLabels[1]}`;
+               else if (chartLabels.length > 2 && chartLabels[0] === 'Meta') chartTitle = `Rendimento Industrial: Meta vs Períodos Selecionados`;
+               else if (chartLabels.length > 1 && chartLabels[0] !== 'Meta') chartTitle = `Rendimento Industrial ao Longo do Tempo`;
+
+
+              graficoRendimentoIndustrialInstancia = new Chart(ctx, {
+                  type: 'bar',
+                   plugins: [ChartDataLabels], // Add datalabels plugin
+                  data: {
+                      labels: chartLabels,
+                      datasets: [{
+                          label: 'Rendimento (%)',
+                          data: chartData,
+                          backgroundColor: chartColors,
+                          borderColor: chartColors.map(color => color.replace('0.8', '1')), // Use opaque border
+                          borderWidth: 1
+                      }]
+                  },
+                  options: commonChartOptions(chartTitle, true) // Pass percentage flag
+              });
+         }
+    }
+
+    // Helper function to get bar color based on context/key
+    function getBarColor(key) {
+         switch (key) {
+              case 'meta': return 'rgba(255, 193, 7, 0.9)'; /* Yellow */
+              case 'turno1': return 'rgba(0, 123, 255, 0.9)'; /* Blue */
+              case 'turno2': return 'rgba(40, 167, 69, 0.9)'; /* Green */
+              case 'periodo1': return 'rgba(0, 123, 255, 0.9)'; /* Blue */
+              case 'periodo2': return 'rgba(111, 66, 193, 0.9)'; /* Purple */
+              case 'yoyYear1': return 'rgba(23, 162, 184, 0.9)'; /* Cyan */
+              case 'yoyYear2': return 'rgba(220, 53, 69, 0.9)'; /* Red */
+               // Add more keys if needed (e.g., 'yoyTotal')
+              default: return 'rgba(108, 117, 125, 0.9)'; /* Grey */
+         }
+    }
+
+
+    function mostrarTabela(dadosPeriodo1, infoPeriodo1, modo, dadosPeriodo2 = null, infoPeriodo2 = null) {
+        let html = "<table><thead><tr><th>Produto</th>";
+        const labelsGrafico = [];
+        const dadosGrafico1 = []; // Data for Period 1 (Realizado % or Kg based on mode)
+        const dadosGrafico2 = []; // Data for Period 2 (Realizado % or Kg) or Meta (Individual)
+
+        destruirGraficos(); // Clear charts before drawing new ones
+
+        // Define table headers and content based on mode
+        if (modo === 'comparativo') {
+            const labelPeriodo1 = infoPeriodo1.tituloPeriodo || infoPeriodo1.data || infoPeriodo1.nome || 'Período 1 (N/D)';
+            const labelPeriodo2 = infoPeriodo2 ? (infoPeriodo2.tituloPeriodo || infoPeriodo2.data || infoPeriodo2.nome || 'Período 2 (N/D)') : 'Período 2 (N/D)';
+
+            let headerRealizado1 = `${labelPeriodo1} (%)`;
+            let headerRealizado2 = `${labelPeriodo2} (%)`;
+            let headerDiffPerc = `Dif. (%)`;
+            let headerDiffKg = `Dif. (Kg)`;
+            let headerDiffCx = `Dif. (Cx)`;
+            let headerStatus = '🏆 Melhor';
+
+             // Check if it's a YoY Total comparison (handled separately in data loading)
+             const isYoYTotal = infoPeriodo1.tipo === 'mensal' && infoPeriodo2?.tipo === 'mensal' &&
+                               (infoPeriodo1.turno === 'Total (T1+T2)' || infoPeriodo2?.turno === 'Total (T1+T2)');
+
+
+             if (isYoYTotal) { // YoY Total comparison shows Kg/Cx primarily
+                 headerRealizado1 = `${labelPeriodo1} (Kg)`;
+                 headerRealizado2 = `${labelPeriodo2} (Kg)`;
+                 headerDiffPerc = `Dif. (Kg)`; // Show Kg diff again for clarity
+                 // Other headers remain Diff (Kg), Diff (Cx), Melhor
+             }
+
+
+            html += `<th class="numeric">${headerRealizado1}</th><th class="numeric">${headerRealizado2}</th><th class="numeric">${headerDiffPerc}</th><th class="numeric">${headerDiffKg}</th><th class="numeric">${headerDiffCx}</th><th class="center">${headerStatus}</th></tr></thead><tbody>`;
+
+            let vitorias1 = 0, vitorias2 = 0, empates = 0;
+            // Collect all unique products from both periods
+            const allProducts = [...new Set([
+                 ...(dadosPeriodo1 || []).map(item => item.produto),
+                 ...(dadosPeriodo2 || []).map(item => item.produto)
+            ])];
+
+             // Sort products alphabetically
+             allProducts.sort();
+
+             for (const produto of allProducts) {
+                 const item1 = (dadosPeriodo1 || []).find(it => it.produto === produto);
+                 const item2 = (dadosPeriodo2 || []).find(it => it.produto === produto);
+
+                 const realizado1 = parseFloat(item1?.realizado) || 0;
+                 const quilos1 = parseFloat(item1?.quilos) || 0;
+                 const caixas1 = parseFloat(item1?.caixas) || 0;
+                 const caixasArredondadas1 = Math.round(caixas1);
+
+                 const realizado2 = parseFloat(item2?.realizado) || 0;
+                 const quilos2 = parseFloat(item2?.quilos) || 0;
+                 const caixas2 = parseFloat(item2?.caixas) || 0;
+                 const caixasArredondadas2 = Math.round(caixas2);
+
+                 let displayRealizado1 = item1 ? (isYoYTotal ? `${quilos1.toFixed(2)}` : `${realizado1.toFixed(3)}%`) : '-';
+                 let displayRealizado2 = item2 ? (isYoYTotal ? `${quilos2.toFixed(2)}` : `${realizado2.toFixed(3)}%`) : '-';
+
+                 const diffKg = quilos2 - quilos1;
+                 const diffCx = caixasArredondadas2 - caixasArredondadas1; // Use rounded difference for display
+
+                 const classeDiffKg = Math.abs(diffKg) < 0.01 ? 'na-meta' : (diffKg > 0 ? 'positivo' : 'negativo');
+                 const classeDiffCx = diffCx === 0 ? 'na-meta' : (diffCx > 0 ? 'positivo' : 'negativo');
+
+                 let melhor = "Empate 🤔";
+                 let classeMelhor = "na-meta";
+                 let displayDiffPerc = '-';
+                 let classeDiffPerc = 'na-meta';
+
+
+                 if (item1 && item2) { // Only compare if product exists in both periods
+                     if (isYoYTotal) { // Compare by Kg for YoY Total
+                          displayDiffPerc = `${diffKg >= 0 ? '+' : ''}${diffKg.toFixed(2)}`; // % column shows Kg diff again
+
+                          if (diffKg > 0.001) { melhor = labelPeriodo2; vitorias2++; classeMelhor = 'positivo'; } // Period 2 better by Kg
+                          else if (diffKg < -0.001) { melhor = labelPeriodo1; vitorias1++; classeMelhor = 'negativo'; } // Period 1 better by Kg
+                          else { melhor = "Empate 🤔"; empates++; classeMelhor = 'na-meta'; } // Close in Kg, consider empate
+
+                     } else { // Standard % comparison
+                         const diffPerc = realizado2 - realizado1;
+                         displayDiffPerc = `${diffPerc >= 0 ? '+' : ''}${diffPerc.toFixed(3)}%`;
+                         classeDiffPerc = Math.abs(diffPerc) < 0.001 ? 'na-meta' : (diffPerc > 0 ? 'positivo' : 'negativo');
+
+                         if (diffPerc > 0.0001) { melhor = labelPeriodo2; vitorias2++; classeMelhor = 'positivo'; } // Period 2 better by %
+                         else if (diffPerc < -0.0001) { melhor = labelPeriodo1; vitorias1++; classeMelhor = 'negativo'; } // Period 1 better by %
+                          // If % is very close, check Kg/Cx for tiebreaker? Let's stick to % first, then Kg, then Cx
+                          else if (Math.abs(diffPerc) < 0.0001) { // Very close in %, check Kg
+                              if (diffKg > 0.001) { melhor = labelPeriodo2; vitorias2++; classeMelhor = 'positivo'; }
+                              else if (diffKg < -0.001) { melhor = labelPeriodo1; vitorias1++; classeMelhor = 'negativo'; }
+                               else if (Math.abs(diffKg) < 0.001) { // Very close in Kg, check Cx
+                                   if (diffCx > 0) { melhor = labelPeriodo2; vitorias2++; classeMelhor = 'positivo'; }
+                                   else if (diffCx < 0) { melhor = labelPeriodo1; vitorias1++; classeMelhor = 'negativo'; }
+                                   else { melhor = "Empate 🤔"; empates++; classeMelhor = 'na-meta'; }
+                               } else { melhor = "Empate 🤔"; empates++; classeMelhor = 'na-meta'; } // Kg diff is close but not zero
+                           } else { melhor = "Empate 🤔"; empates++; classeMelhor = 'na-meta'; } // % diff is close but not zero
+                     }
+                 } else if (item1) { // Only in Period 1
+                     melhor = labelPeriodo1;
+                     classeMelhor = 'na-meta'; // Not really better, just present. Could highlight? Let's keep neutral.
+                     // Differences are N/A
+                 } else if (item2) { // Only in Period 2
+                     melhor = labelPeriodo2;
+                     classeMelhor = 'na-meta'; // Not really better, just present.
+                     // Differences are N/A
+                 } else { // Should not happen with correct product listing
+                      melhor = "-"; classeMelhor = "na-meta";
+                 }
+
+
+                 html += `<tr><td>${produto}</td><td class="numeric">${displayRealizado1}</td><td class="numeric">${displayRealizado2}</td><td class="numeric ${classeDiffPerc}">${displayDiffPerc}</td><td class="numeric ${classeDiffKg}">${item1 && item2 ? `${diffKg >= 0 ? '+' : ''}${diffKg.toFixed(2)}` : '-'}</td><td class="numeric ${classeDiffCx}">${item1 && item2 ? `${diffCx >= 0 ? '+' : ''}${diffCx}` : '-'}</td><td class="center ${classeMelhor}">${melhor}</td></tr>`;
+
+                 // Data for Product Comparison Chart
+                 labelsGrafico.push(produto);
+                  // For chart, plot percentage if available, otherwise plot Kg for aggregated total
+                  dadosGrafico1.push(item1 ? (isYoYTotal ? quilos1 : realizado1) : null);
+                  dadosGrafico2.push(item2 ? (isYoYTotal ? quilos2 : realizado2) : null);
+             }
+
+
+            html += "</tbody></table>";
+             // Use infoPeriod1.tituloPeriodo etc for summary labels too
+            html += `<div class="summary"><strong>Resumo Comparativo:</strong><br>Resultado: ${labelPeriodo1} (${vitorias1} produtos melhor) vs ${labelPeriodo2} (${vitorias2} produtos melhor). ${empates} empate(s).<br><strong>🏆 Vencedor Geral (Mais Produtos Melhores): ${vitorias1 > vitorias2 ? labelPeriodo1 : (vitorias2 > vitorias1 ? labelPeriodo2 : 'Empate Técnico')}</strong></div>`;
+
+             // Determine chart type based on data being plotted (% or Kg)
+             const isChartPercentage = !isYoYTotal; // Chart shows % unless it's YoY Total
+
+             // Use the title of the comparison type for the chart title
+             let chartTitlePrefix = 'Comparativo Produtos';
+              if (tipoAnaliseAtual.includes('dia_dia')) chartTitlePrefix = 'Comparativo Diário por Produto';
+              else if (tipoAnaliseAtual.includes('mes_mes')) chartTitlePrefix = 'Comparativo Mensal por Produto';
+              else if (tipoAnaliseAtual.includes('yoy')) chartTitlePrefix = 'Comparativo Anual por Produto';
+              else if (tipoAnaliseAtual.includes('_t1t2')) chartTitlePrefix = `Comparativo T1 vs T2 por Produto`;
+
+              const chartTitleSuffix = `(${labelPeriodo1} vs ${labelPeriodo2})`;
+
+
+             desenharGraficoComparativo(labelsGrafico, dadosGrafico1, dadosGrafico2, labelPeriodo1, labelPeriodo2, `${chartTitlePrefix} ${chartTitleSuffix}`, isChartPercentage);
+
+        } else { // Modos Individuais (diario, semanal, mensal)
+            let modoIndividual = infoPeriodo1.tipo;
+            let headerMeta = 'Meta (%)';
+            let headerRealizado = 'Realizado (%)';
+            let headerDiff = 'Dif. (%)';
+            let headerStatus = 'Status';
+            let hasKgCxDiffVsMeta = false; // Flag to include Kg/Cx difference columns vs Meta
+
+
+             if (modoIndividual === 'semanal' || modoIndividual === 'mensal') {
+                  headerRealizado = modoIndividual === 'mensal' ? 'Realizado Médio (%)' : 'Realizado (%)'; // Clarify for monthly
+                  headerStatus = modoIndividual === 'semanal' ? 'Status Semanal' : 'Status Mensal';
+                  hasKgCxDiffVsMeta = true; // Calculate Kg/Cx diff vs Meta for these periods
+             }
+             // Base daily headers are already implicitly handled
+
+
+            html += `<th class="numeric">${headerMeta}</th><th class="numeric">${headerRealizado}</th><th class="numeric">${headerDiff}</th>`;
+             if (hasKgCxDiffVsMeta) {
+                  html += `<th class="numeric">Dif. (Kg vs Meta)</th><th class="numeric">Dif. (Cx vs Meta)</th>`;
+             } else { // Daily view includes raw Kg/Cx
+                  html += `<th class="numeric">Quilos (Kg)</th><th class="numeric">Caixas</th>`;
+             }
+             html += `<th class="center">${headerStatus}</th></tr></thead><tbody>`;
+
+             const dadosIndividuais = Array.isArray(dadosPeriodo1) ? dadosPeriodo1 : [];
+              // Sort products alphabetically for consistency
+             dadosIndividuais.sort((a, b) => a.produto.localeCompare(b.produto));
+
+            for (let item of dadosIndividuais) {
+                 const produto = item.produto;
+                 const meta = parseFloat(item.meta) || 0;
+                 const realizado = parseFloat(item.realizado) || 0;
+                 const quilos = parseFloat(item.quilos) || 0;
+                 const caixas = parseFloat(item.caixas) || 0;
+                 const caixasArredondadas = Math.round(caixas);
+                 const diffPerc = realizado - meta;
+                 const classeDiffPerc = Math.abs(diffPerc) < 0.001 ? 'na-meta' : (diffPerc > 0 ? 'positivo' : 'negativo');
+                 const diffPercentFormatted = `${diffPerc >= 0 ? '+' : ''}${diffPerc.toFixed(3)}%`;
+
+                 html += `<tr><td>${produto}</td><td class="numeric">${meta.toFixed(3)}%</td><td class="numeric">${realizado.toFixed(3)}%</td><td class="numeric ${classeDiffPerc}">${diffPercentFormatted}</td>`;
+
+                 if (hasKgCxDiffVsMeta) { // Semanal or Mensal
+                     let diffKgVsMetaDisplay = 'N/A'; let diffCaixasVsMetaDisplay = 'N/A'; let statusLabel = ""; let statusClass = "";
+                     const labelTipo = modoIndividual === 'semanal' ? 'Semanal' : 'Mensal';
+
+                     if (meta > 0) { // Can calculate difference against a positive meta
+                          // Calculate target Kg/Caixas based on actual Kg/Caixas and Meta/Realizado ratio
+                          // This calculation assumes the Kg/Caixas values correspond to the 'realizado' percentage.
+                          // If Realizado is 0, avoid division by zero.
+                          let diffKgNum = 0;
+                          let diffCaixasNum = 0;
+
+                          if (realizado > 0) {
+                              const ratioRealizedToMeta = meta / realizado;
+                              const targetKg = quilos * ratioRealizedToMeta; // Kg needed to have Realizado = Meta % with the SAME input weight
+                              const targetCaixas = caixas * ratioRealizedToMeta;
+
+                              diffKgNum = quilos - targetKg; // If positive, produced *more* Kg than *required* to hit meta % based on actual yield ratio
+                              diffCaixasNum = caixas - targetCaixas;
+
+                              diffKgVsMetaDisplay = `${diffKgNum >= 0 ? '+' : ''}${diffKgNum.toFixed(2)}`;
+                              diffCaixasVsMetaDisplay = `${Math.round(diffCaixasNum) >= 0 ? '+' : ''}${Math.round(diffCaixasNum)}`;
+
+                          } else { // Realizado is 0 but Meta > 0
+                               // Produced 0 Kg/Caixas, but had a meta. Treat as a full deficit relative to meta.
+                               // The difference should reflect how much Kg/Cx *would* have been needed to hit meta.
+                               // This is complex without input weight. Let's show N/A or indicate lack of production.
+                               diffKgVsMetaDisplay = "(Sem produção)";
+                               diffCaixasVsMetaDisplay = "(Sem produção)";
+                          }
+
+
+                          // Status based on percentage difference primarily
+                           if (diffPerc >= 0.001) { // Met or exceeded meta % significantly
+                               statusLabel = `✅ Acima Meta ${labelTipo}`; statusClass = "positivo";
+                           } else if (diffPerc <= -0.001) { // Below meta % significantly
+                               statusLabel = `❌ Abaixo Meta ${labelTipo}`; statusClass = "negativo";
+                           } else { // Very close to meta %
+                               statusLabel = `🎯 Na Meta ${labelTipo}`; statusClass = "na-meta";
+                           }
+
+                      } else if (meta === 0 && realizado > 0) { // Produced with 0 meta - pure surplus
+                           diffKgVsMetaDisplay = `+${quilos.toFixed(2)}`;
+                           diffCaixasVsMetaDisplay = `+${caixasArredondadas}`;
+                           statusLabel = `✅ Excedente Total ${labelTipo}`; statusClass = "positivo"; // Treat as surplus
+                      } else { // meta is 0 and realizado is 0, or meta < 0 (invalid?)
+                           diffKgVsMetaDisplay = "N/A";
+                           diffCaixasVsMetaDisplay = "N/A";
+                           statusLabel = `➖ Sem Dados/Meta`; statusClass = "na-meta";
+                      }
+
+
+                     html += `<td class="numeric ${statusClass}">${diffKgVsMetaDisplay}</td><td class="numeric ${statusClass}">${diffCaixasVsMetaDisplay}</td><td class="center ${statusClass}">${statusLabel}</td>`;
+
+                 } else { // Diário
+                    const atingiu = realizado >= meta ? "✅ Sim" : "❌ Não";
+                    const classeAtingiu = realizado >= meta ? "positivo" : "negativo";
+                    html += `<td class="center ${classeAtingiu}">${atingiu}</td><td class="numeric">${quilos.toFixed(2)}</td><td class="numeric">${caixasArredondadas}</td>`;
+                 }
+                 html += `</tr>`;
+
+                 labelsGrafico.push(produto);
+                 dadosGrafico1.push(meta); // Data1 = Meta
+                 dadosGrafico2.push(realizado); // Data2 = Realizado
+            }
+            html += "</tbody></table>";
+
+             // Add individual summary
+             html += `<div class="summary"><strong>Resumo ${infoPeriodo1.tipo.charAt(0).toUpperCase() + infoPeriodo1.tipo.slice(1)} ${infoPeriodo1.turno} (${infoPeriodo1.tituloPeriodo}):</strong><br>Visão detalhada da performance por produto. A coluna "Dif. (%)" mostra a diferença percentual em relação à meta. As colunas "Dif. (Kg vs Meta)" e "Dif. (Cx vs Meta)" (para análises semanais/mensais) estimam a diferença em quantidade baseada na meta percentual e produção real.</div>`;
+
+
+            desenharGraficoIndividual(labelsGrafico, dadosGrafico1, dadosGrafico2, infoPeriodo1.turno, infoPeriodo1.tipo);
+        }
+
+        document.getElementById("resultado").innerHTML = html;
+        document.getElementById("contentArea").style.display = 'block';
+        document.querySelector('.btn-pdf-visao').style.display = 'inline-block'; // Show PDF button
+         esconderStatus(); // Hide status after displaying results
+    }
+
+
+    function desenharGraficoComparativo(labels, data1, data2, label1, label2, titleText, isPercentage = true) {
+        const container = document.getElementById("graficoComparativoContainer");
+        const canvas = document.getElementById("graficoComparativo");
+        container.style.display = "block";
+        const ctx = canvas.getContext('2d');
+        if (graficoComparativoInstancia) { graficoComparativoInstancia.destroy(); }
+
+        // Use colors based on general period/turn roles, not specific types unless necessary
+        const color1 = getBarColor('periodo1');
+        const color2 = getBarColor('periodo2');
+
+
+        try {
+            graficoComparativoInstancia = new Chart(ctx, {
+                type: 'bar',
+                 plugins: [ChartDataLabels], // Add datalabels plugin
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: label1, backgroundColor: color1, borderColor: color1.replace('0.9','1'), borderWidth: 1, data: data1, skipNull: true },
+                        { label: label2, backgroundColor: color2, borderColor: color2.replace('0.9','1'), borderWidth: 1, data: data2, skipNull: true }
+                    ]
+                },
+                options: commonChartOptions(titleText, isPercentage) // Pass percentage flag
+            });
+        } catch (error) {
+            console.error("Erro ao criar gráfico comparativo:", error);
+            container.innerHTML = "<p class='negativo'>Erro ao renderizar o gráfico comparativo.</p>";
+        }
+    }
+
+    function desenharGraficoIndividual(labels, metas, realizados, turnoLabel, tipoAnalise) {
+        const container = document.getElementById("graficoIndividualContainer");
+        const canvas = document.getElementById("graficoIndividual");
+        container.style.display = "block";
+        const ctx = canvas.getContext('2d');
+        if (graficoIndividualInstancia) { graficoIndividualInstancia.destroy(); }
+
+        const turnoColorRealizado = getBarColor(turnoLabel.toLowerCase().replace(' ','')); // 'turno1' or 'turno2'
+
+        try {
+            graficoIndividualInstancia = new Chart(ctx, {
+                type: 'bar',
+                 plugins: [ChartDataLabels], // Add datalabels plugin
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Meta (%)', backgroundColor: getBarColor('meta'), borderColor: getBarColor('meta').replace('0.9','1'), borderWidth: 1, data: metas },
+                        { label: 'Realizado (%)', backgroundColor: turnoColorRealizado, borderColor: turnoColorRealizado.replace('0.9','1'), borderWidth: 1, data: realizados }
+                    ]
+                },
+                options: commonChartOptions(`Rendimento ${tipoAnalise.charAt(0).toUpperCase() + tipoAnalise.slice(1)} ${turnoLabel}: Meta vs Realizado (%)`, true)
+            });
+        } catch (error) {
+            console.error("Erro ao criar gráfico individual:", error);
+            container.innerHTML = "<p class='negativo'>Erro ao renderizar o gráfico individual.</p>";
+        }
+    }
+
+
+    // --- Funções de Navegação e Controle ---
+    function voltarMenu() {
+        destruirGraficos();
+        document.querySelector(".menu").style.display = 'block';
+        document.querySelector(".voltar").style.display = 'none';
+        document.getElementById("info").style.display = 'none';
+        document.getElementById("contentArea").style.display = 'none';
+        document.getElementById("resultado").innerHTML = "";
+         document.getElementById("industrialYieldAnalysis").style.display = 'none'; // Hide yield section
+        document.querySelector('.btn-pdf-visao').style.display = 'none';
+        document.getElementById('seletorPeriodo').style.display = 'none'; // Esconde seletores
+        tipoAnaliseAtual = null; // Limpa o tipo selecionado
+         esconderStatus();
+         dadosVisaoAtual = {}; // Clear data
+    }
+
+    function selecionarPeriodo(tipo) {
+        tipoAnaliseAtual = tipo; // Guarda o tipo de análise desejada
+        //console.log("Selecionando período para:", tipoAnaliseAtual);
+        document.querySelector(".menu").style.display = 'none';
+        document.getElementById("contentArea").style.display = 'none';
+        document.getElementById("info").style.display = 'none';
+        document.getElementById("industrialYieldAnalysis").style.display = 'none';
+        destruirGraficos();
+         esconderStatus();
+         dadosVisaoAtual = {}; // Clear data
+
+
+        const seletorPeriodoDiv = document.getElementById('seletorPeriodo');
+        const tituloSpan = document.getElementById('tipoAnaliseSelecionada');
+
+        // Hide all specific selector groups initially
+        document.getElementById('seletorSinglePeriod').style.display = 'none';
+        document.getElementById('seletorDualPeriod').style.display = 'none';
+        document.getElementById('seletorYoY').style.display = 'none';
+        // Hide all individual inputs/selects within groups
+        document.querySelectorAll('#seletorPeriodo input, #seletorPeriodo select').forEach(el => el.style.display = 'none');
+
+
+        // Show the correct selectors based on type
+        let tituloAnalise = "Análise";
+        if (tipo.startsWith('diario') || tipo === 'comparar_dia_t1t2') {
+            tituloAnalise = tipo.includes('comparar') ? 'Comparativa Diária' : 'Diária Individual';
+            document.getElementById('seletorSinglePeriod').style.display = 'flex'; // Use flex for layout
+            document.getElementById('inputDataGroup').style.display = 'block';
+             document.getElementById('inputData').style.display = 'inline-block';
+             // Set default date to today if empty
+            const inputData = document.getElementById('inputData');
+            if (!inputData.value) { inputData.valueAsDate = new Date(); }
+
+        } else if (tipo.startsWith('semanal') || tipo === 'comparar_semana_t1t2') {
+            tituloAnalise = tipo.includes('comparar') ? 'Comparativa Semanal' : 'Semanal Individual';
+            document.getElementById('seletorSinglePeriod').style.display = 'flex';
+            document.getElementById('selectSemanaGroup').style.display = 'block';
+             document.getElementById('selectSemana').style.display = 'inline-block';
+
+        } else if (tipo.startsWith('mensal') && !tipo.includes('_t1t2')) { // Individual Mensal
+            tituloAnalise = 'Mensal Individual';
+             document.getElementById('seletorSinglePeriod').style.display = 'flex';
+            document.getElementById('selectMesAnoGroup').style.display = 'block';
+             document.getElementById('selectAno').style.display = 'inline-block';
+             document.getElementById('selectMes').style.display = 'inline-block';
+
+        } else if (tipo === 'comparar_dia_t1t2') { // Specific case: Comparar Dia T1 vs T2 uses single date selector
+             tituloAnalise = 'Comparar Dia (T1 vs T2)';
+             document.getElementById('seletorSinglePeriod').style.display = 'flex';
+             document.getElementById('inputDataGroup').style.display = 'block';
+             document.getElementById('inputData').style.display = 'inline-block';
+              const inputData = document.getElementById('inputData');
+              if (!inputData.value) { inputData.valueAsDate = new Date(); }
+
+        } else if (tipo === 'comparar_semana_t1t2') { // Specific case: Comparar Semana T1 vs T2 uses single week selector
+             tituloAnalise = 'Comparar Semana (T1 vs T2)';
+             document.getElementById('seletorSinglePeriod').style.display = 'flex';
+             document.getElementById('selectSemanaGroup').style.display = 'block';
+             document.getElementById('selectSemana').style.display = 'inline-block';
+
+        } else if (tipo === 'comparar_mes_t1t2') { // Specific case: Comparar Mês T1 vs T2 uses single month/year selector
+             tituloAnalise = 'Comparar Mês (T1 vs T2)';
+              document.getElementById('seletorSinglePeriod').style.display = 'flex';
+             document.getElementById('selectMesAnoGroup').style.display = 'block';
+             document.getElementById('selectAno').style.display = 'inline-block';
+             document.getElementById('selectMes').style.display = 'inline-block';
+
+        } else if (tipo === 'comparar_dois_dias_turno') {
+            tituloAnalise = 'Comparar Dois Dias (Mesmo Turno)';
+            document.getElementById('seletorDualPeriod').style.display = 'flex'; // Use flex for layout
+             document.getElementById('labelPeriodo1').textContent = 'Data 1:';
+             document.getElementById('labelPeriodo2').textContent = 'Data 2:';
+             document.getElementById('inputData1').style.display = 'inline-block';
+             document.getElementById('inputData2').style.display = 'inline-block';
+             document.getElementById('seletorTurnoComparacao').style.display = 'block';
+             document.getElementById('selectTurno').style.display = 'inline-block';
+             // Set default dates
+             const inputData1 = document.getElementById('inputData1');
+             const inputData2 = document.getElementById('inputData2');
+             if (!inputData1.value) inputData1.valueAsDate = new Date();
+             if (!inputData2.value) inputData2.valueAsDate = new Date();
+
+
+        } else if (tipo === 'comparar_dois_meses_turno') {
+             tituloAnalise = 'Comparar Dois Meses (Mesmo Turno)';
+             document.getElementById('seletorDualPeriod').style.display = 'flex';
+             document.getElementById('labelPeriodo1').textContent = 'Mês/Ano 1:';
+             document.getElementById('labelPeriodo2').textContent = 'Mês/Ano 2:';
+             document.getElementById('selectAno1').style.display = 'inline-block';
+             document.getElementById('selectMes1').style.display = 'inline-block';
+             document.getElementById('selectAno2').style.display = 'inline-block';
+             document.getElementById('selectMes2').style.display = 'inline-block';
+             document.getElementById('seletorTurnoComparacao').style.display = 'block';
+             document.getElementById('selectTurno').style.display = 'inline-block';
+              // Ensure month selectors are populated based on selected year
+              setupMonthYearSelectors(document.getElementById('selectAno1'), document.getElementById('selectMes1'));
+              setupMonthYearSelectors(document.getElementById('selectAno2'), document.getElementById('selectMes2'));
+
+
+        } else if (tipo === 'comparar_mes_yoy') {
+             tituloAnalise = 'Comparar Mês Anos Anteriores';
+             document.getElementById('seletorYoY').style.display = 'flex';
+             document.getElementById('selectYoYMonthYearGroup').style.display = 'block';
+             document.getElementById('selectYoYComparisonType').style.display = 'block';
+              document.getElementById('selectYoYAno').style.display = 'inline-block';
+             document.getElementById('selectYoYMes').style.display = 'inline-block';
+             document.getElementById('selectYoYTurno').style.display = 'inline-block';
+             // Ensure month selector is populated based on selected year
+             setupMonthYearSelectors(document.getElementById('selectYoYAno'), document.getElementById('selectYoYMes'), true);
+        } else {
+             // Unknown type - go back to menu
+             mostrarStatus(`Tipo de análise "${tipo}" não reconhecido.`, true);
+             voltarMenu();
+             return;
+        }
+
+
+        tituloSpan.textContent = tituloAnalise;
+        seletorPeriodoDiv.style.display = 'block'; // Show the selector area
+        document.querySelector(".voltar").style.display = 'inline-block'; // Show the main Back button
+    }
+
+    function cancelarSelecao() {
+        document.getElementById('seletorPeriodo').style.display = 'none';
+        voltarMenu(); // Uses voltarMenu to return to the main menu
+    }
+
+     // Helper to aggregate data for T1+T2 (mostly for YoY Total)
+     function agregarDadosTurnos(dadosT1, dadosT2) {
+         const aggregatedData = [];
+         const productMap = new Map(); // Map product to aggregated item
+
+         // Add T1 data
+         if (dadosT1 && Array.isArray(dadosT1)) {
+              dadosT1.forEach(item => {
+                  const produto = item.produto;
+                  productMap.set(produto, {
+                      produto: produto,
+                      meta: parseFloat(item.meta) || 0, // Assume meta is consistent, take T1's
+                      realizado: 0, // Realizado % is complex for aggregated, use NaN or 0
+                      quilos: parseFloat(item.quilos) || 0,
+                      caixas: parseFloat(item.caixas) || 0,
+                  });
+              });
+         }
+
+         // Add T2 data (and merge/aggregate with T1 if exists)
+         if (dadosT2 && Array.isArray(dadosT2)) {
+             dadosT2.forEach(item => {
+                 const produto = item.produto;
+                 const existingItem = productMap.get(produto);
+
+                 if (existingItem) {
+                     // Merge with existing item
+                     existingItem.quilos += parseFloat(item.quilos) || 0;
+                     existingItem.caixas += parseFloat(item.caixas) || 0;
+                      // Decide how to handle meta if different? For now, keep the one already added (from T1 or first seen)
+                 } else {
+                     // Add as new item (only in T2)
+                     productMap.set(produto, {
+                         produto: produto,
+                         meta: parseFloat(item.meta) || 0, // Meta from T2
+                         realizado: 0, // Realizado % complex, use NaN or 0
+                         quilos: parseFloat(item.quilos) || 0,
+                         caixas: parseFloat(item.caixas) || 0,
+                     });
+                 }
+             });
+         }
+
+          // Push map values to array
+          // Calculate an overall average realized for the total period?
+          // This requires total input weight, which we don't have per product.
+          // Let's calculate a simple average of the two yield percentages IF both existed.
+          // This is NOT a true combined yield but might offer *some* insight.
+          // Or better, calculate yield based on TOTAL quilos / TOTAL meta quilos if meta is in Kg?
+          // Sticking to Kg/Cx comparison for products in total view is safest. The 'realizado' field will be 0.
+
+         return Array.from(productMap.values()); // Array of aggregated product objects
+     }
+
+
+    async function carregarDadosSelecionados() {
+        mostrarStatus("⏳ Carregando dados selecionados...");
+        document.getElementById('seletorPeriodo').style.display = 'none'; // Hide selectors after clicking load
+        document.getElementById("contentArea").style.display = 'none'; // Hide previous results
+        document.getElementById("industrialYieldAnalysis").style.display = 'none';
+        document.querySelector('.btn-pdf-visao').style.display = 'none';
+        destruirGraficos();
+        dadosVisaoAtual = {}; // Clear global data storage
+
+        let infoPeriodo1 = null, dadosPeriodo1Raw = null;
+        let infoPeriodo2 = null, dadosPeriodo2Raw = null; // For comparative modes
+        let modoTabela = '';
+        let tituloPrincipal = 'Relatório'; // Default title parts
+        let subtitulo = null;
+        let yieldDataForComparison = [{ key: 'meta', label: 'Meta', yield: META_RENDIMENTO_INDUSTRIAL }]; // Array for industrial yield data, start with meta
+
+        try {
+            // --- 1. Determine required files and processing logic based on tipoAnaliseAtual ---
+
+            if (tipoAnaliseAtual.startsWith('diario') && !tipoAnaliseAtual.includes('_t1t2')) { // Individual Diário
+                 const dataInput = document.getElementById('inputData').value; // YYYY-MM-DD
+                 if (!dataInput) throw new Error("Nenhuma data selecionada.");
+                 const turno = tipoAnaliseAtual === 'diario1' ? 'turno1' : 'turno2';
+                 const fileInfo = findFileInfoByDateAndTurn(dataInput, turno);
+                 if (!fileInfo) throw new Error(`Nenhum arquivo encontrado para ${turno.replace('turno','Turno ')} na data ${formatarDataParaExibicao(dataInput.split('-').reverse().join('/'))}.`);
+                 dadosPeriodo1Raw = await fetch(fileInfo.nome).then(res => res.json());
+                 infoPeriodo1 = fileInfo;
+                 modoTabela = 'individual';
+                 tituloPrincipal = `Relatório Diário`;
+                 subtitulo = `${infoPeriodo1.turno} (${infoPeriodo1.tituloPeriodo})`;
+
+            } else if (tipoAnaliseAtual.startsWith('semanal') && !tipoAnaliseAtual.includes('_t1t2')) { // Individual Semanal
+                 const idSemana = document.getElementById('selectSemana').value; // semana.XXaYY.MM.YY
+                 if (!idSemana) throw new Error("Nenhuma semana selecionada.");
+                 const turno = tipoAnaliseAtual === 'semanal1' ? 'turno1' : 'turno2';
+                 const fileInfo = findFileInfoByIdBaseAndTurn(idSemana, turno, 'semanal');
+                 if (!fileInfo) throw new Error(`Nenhum arquivo encontrado para ${turno.replace('turno','Turno ')} na semana ${idSemana}.`);
+                 dadosPeriodo1Raw = await fetch(fileInfo.nome).then(res => res.json());
+                 infoPeriodo1 = fileInfo;
+                 modoTabela = 'individual';
+                 tituloPrincipal = `Relatório Semanal`;
+                 subtitulo = `${infoPeriodo1.turno} (${infoPeriodo1.tituloPeriodo})`;
+
+            } else if (tipoAnaliseAtual.startsWith('mensal') && !tipoAnaliseAtual.includes('_t1t2')) { // Individual Mensal
+                 const mesNum = document.getElementById('selectMes').value;
+                 const anoCompleto = document.getElementById('selectAno').value;
+                 if (!mesNum || !anoCompleto) throw new Error("Mês ou ano para análise mensal não selecionado.");
+                 const turno = tipoAnaliseAtual === 'mensal1' ? 'turno1' : 'turno2';
+                 const baseId = `mensal.${mesNum.padStart(2,'0')}.${anoCompleto.substring(2)}`;
+                 const fileInfo = findFileInfoByIdBaseAndTurn(baseId, turno, 'mensal');
+                 if (!fileInfo) throw new Error(`Nenhum arquivo encontrado para ${turno.replace('turno','Turno ')} no mês ${formatarDataParaExibicao(`${mesNum}/${anoCompleto}`)}.`);
+                 const dadosMensal = await fetch(fileInfo.nome).then(res => res.json());
+                 dadosPeriodo1Raw = dadosMensal; // Keep raw data to get yield field
+                 infoPeriodo1 = fileInfo;
+                 modoTabela = 'individual';
+                 tituloPrincipal = `Relatório Mensal`;
+                 subtitulo = `${infoPeriodo1.turno} (${infoPeriodo1.tituloPeriodo})`;
+                  // Add Industrial Yield for individual monthly
+                  if (dadosMensal.rendimento_industrial !== undefined) {
+                       yieldDataForComparison.push({ key: infoPeriodo1.turno.toLowerCase().replace(' ',''), label: infoPeriodo1.tituloPeriodo, yield: parseFloat(dadosMensal.rendimento_industrial) });
+                  }
+
+
+            } else if (tipoAnaliseAtual.includes('_t1t2')) { // Comparar T1 vs T2 (Dia, Semana, Mês)
+                 const periodoType = tipoAnaliseAtual.split('_')[1]; // dia, semana, mes
+                 let idPeriodo = null;
+                 let labelPeriodo = ''; // Label for the period (e.g., "14/04/2025" or "Semana 08 a 12...")
+
+                 if (periodoType === 'dia') {
+                     const dataInput = document.getElementById('inputData').value; // YYYY-MM-DD
+                     if (!dataInput) throw new Error("Nenhuma data selecionada para comparação.");
+                     // Find ANY daily file for this date to get the baseId and formatted label
+                     const anyFileInfo = findFileInfoByDateAndTurn(dataInput, 'turno1') || findFileInfoByDateAndTurn(dataInput, 'turno2');
+                     if (!anyFileInfo) throw new Error(`Nenhum arquivo encontrado para a data ${formatarDataParaExibicao(dataInput.split('-').reverse().join('/'))}.`);
+                     idPeriodo = anyFileInfo.idBase;
+                     labelPeriodo = anyFileInfo.tituloPeriodo;
+
+                 } else if (periodoType === 'semana') {
+                     idPeriodo = document.getElementById('selectSemana').value;
+                     if (!idPeriodo) throw new Error("Nenhuma semana selecionada para comparação.");
+                      // Find ANY weekly file for this idBase to get the formatted label
+                      const anyFileInfo = findFileInfoByIdBaseAndTurn(idPeriodo, 'turno1', 'semanal') || findFileInfoByIdBaseAndTurn(idPeriodo, 'turno2', 'semanal');
+                      if (!anyFileInfo) throw new Error(`Nenhum arquivo semanal encontrado para a base "${idPeriodo}".`);
+                     labelPeriodo = anyFileInfo.tituloPeriodo;
+
+                 } else if (periodoType === 'mes') {
+                     const mesNum = document.getElementById('selectMes').value;
+                     const anoCompleto = document.getElementById('selectAno').value;
+                     if (!mesNum || !anoCompleto) throw new Error("Mês ou ano para comparação não selecionado.");
+                     idPeriodo = `mensal.${mesNum.padStart(2,'0')}.${anoCompleto.substring(2)}`;
+                     labelPeriodo = formatarDataParaExibicao(`${mesNum}/${anoCompleto}`); // Get formatted month label
+                 }
+                 if (!idPeriodo) throw new Error("Não foi possível identificar o período para comparação T1 vs T2.");
+
+
+                 const fileInfo1 = findFileInfoByIdBaseAndTurn(idPeriodo, 'turno1', periodoType);
+                 const fileInfo2 = findFileInfoByIdBaseAndTurn(idPeriodo, 'turno2', periodoType);
+
+                 if (!fileInfo1 && !fileInfo2) throw new Error(`Nenhum arquivo encontrado para T1 ou T2 para o período selecionado (${labelPeriodo}).`);
+
+                 if (fileInfo1) {
+                      dadosPeriodo1Raw = await fetch(fileInfo1.nome).then(res => res.json());
+                      infoPeriodo1 = fileInfo1;
+                       // Add Industrial Yield for monthly T1 vs T2 comparison
+                      if (periodoType === 'mensal' && dadosPeriodo1Raw.rendimento_industrial !== undefined) {
+                          yieldDataForComparison.push({ key: 'turno1', label: infoPeriodo1.turno, yield: parseFloat(dadosPeriodo1Raw.rendimento_industrial) });
+                      }
+                 } else {
+                      dadosPeriodo1Raw = null; // No data
+                      infoPeriodo1 = { tituloPeriodo: labelPeriodo, turno: 'Turno 1', tipo: periodoType }; // Dummy info for display
+                      mostrarStatus(`⚠️ Arquivo do Turno 1 não encontrado para ${labelPeriodo}. A comparação será incompleta.`, false);
+                 }
+
+                 if (fileInfo2) {
+                      dadosPeriodo2Raw = await fetch(fileInfo2.nome).then(res => res.json());
+                      infoPeriodo2 = fileInfo2;
+                       // Add Industrial Yield for monthly T1 vs T2 comparison
+                       if (periodoType === 'mensal' && dadosPeriodo2Raw.rendimento_industrial !== undefined) {
+                           yieldDataForComparison.push({ key: 'turno2', label: infoPeriodo2.turno, yield: parseFloat(dadosPeriodo2Raw.rendimento_industrial) });
+                       }
+                 } else {
+                      dadosPeriodo2Raw = null; // No data
+                      infoPeriodo2 = { tituloPeriodo: labelPeriodo, turno: 'Turno 2', tipo: periodoType }; // Dummy info
+                      mostrarStatus(`⚠️ Arquivo do Turno 2 não encontrado para ${labelPeriodo}. A comparação será incompleta.`, false);
+                 }
+
+                 modoTabela = 'comparativo';
+                 tituloPrincipal = `Comparativo de Turnos (${labelPeriodo})`;
+                 subtitulo = `${infoPeriodo1?.turno || 'Turno 1'} 🔵 vs ${infoPeriodo2?.turno || 'Turno 2'} 🟢`;
+
+
+            } else if (tipoAnaliseAtual === 'comparar_dois_dias_turno') {
+                 const dataInput1 = document.getElementById('inputData1').value; // YYYY-MM-DD
+                 const dataInput2 = document.getElementById('inputData2').value; // YYYY-MM-DD
+                 const selectedTurno = document.getElementById('selectTurno').value; // turno1 or turno2
+                 if (!dataInput1 || !dataInput2 || !selectedTurno) throw new Error("Selecione as duas datas e o turno.");
+                 const turnoLabel = selectedTurno.replace('turno','Turno ');
+
+                 const fileInfo1 = findFileInfoByDateAndTurn(dataInput1, selectedTurno);
+                 const fileInfo2 = findFileInfoByDateAndTurn(dataInput2, selectedTurno);
+
+                 if (!fileInfo1 && !fileInfo2) throw new Error(`Nenhum arquivo encontrado para o ${turnoLabel} nas datas selecionadas.`);
+                 if (!fileInfo1) mostrarStatus(`⚠️ Arquivo não encontrado para ${turnoLabel} na data ${formatarDataParaExibicao(dataInput1.split('-').reverse().join('/'))}. A comparação será incompleta.`, false);
+                 if (!fileInfo2) mostrarStatus(`⚠️ Arquivo não encontrado para ${turnoLabel} na data ${formatarDataParaExibicao(dataInput2.split('-').reverse().join('/'))}. A comparação será incompleta.`, false);
+
+                 if (fileInfo1) { dadosPeriodo1Raw = await fetch(fileInfo1.nome).then(res => res.json()); infoPeriodo1 = fileInfo1; } else { dadosPeriodo1Raw = null; infoPeriodo1 = { tituloPeriodo: formatarDataParaExibicao(dataInput1.split('-').reverse().join('/')), turno: turnoLabel, tipo: 'diario' }; }
+                 if (fileInfo2) { dadosPeriodo2Raw = await fetch(fileInfo2.nome).then(res => res.json()); infoPeriodo2 = fileInfo2; } else { dadosPeriodo2Raw = null; infoPeriodo2 = { tituloPeriodo: formatarDataParaExibicao(dataInput2.split('-').reverse().join('/')), turno: turnoLabel, tipo: 'diario' }; }
+
+                 modoTabela = 'comparativo';
+                 tituloPrincipal = `Comparativo Diário (Mesmo Turno: ${turnoLabel})`;
+                 subtitulo = `${infoPeriodo1.tituloPeriodo} vs ${infoPeriodo2.tituloPeriodo}`;
+
+
+            } else if (tipoAnaliseAtual === 'comparar_dois_meses_turno') {
+                 const mesNum1 = document.getElementById('selectMes1').value;
+                 const anoCompleto1 = document.getElementById('selectAno1').value;
+                 const mesNum2 = document.getElementById('selectMes2').value;
+                 const anoCompleto2 = document.getElementById('selectAno2').value;
+                 const selectedTurno = document.getElementById('selectTurno').value; // turno1 or turno2
+                 if (!mesNum1 || !anoCompleto1 || !mesNum2 || !anoCompleto2 || !selectedTurno) throw new Error("Selecione os dois meses/anos e o turno.");
+                 const turnoLabel = selectedTurno.replace('turno','Turno ');
+
+                 const baseId1 = `mensal.${mesNum1.padStart(2,'0')}.${anoCompleto1.substring(2)}`;
+                 const baseId2 = `mensal.${mesNum2.padStart(2,'0')}.${anoCompleto2.substring(2)}`;
+
+                 const fileInfo1 = findFileInfoByIdBaseAndTurn(baseId1, selectedTurno, 'mensal');
+                 const fileInfo2 = findFileInfoByIdBaseAndTurn(baseId2, selectedTurno, 'mensal');
+
+                 if (!fileInfo1 && !fileInfo2) throw new Error(`Nenhum arquivo encontrado para o ${turnoLabel} nos meses selecionados.`);
+                 if (!fileInfo1) mostrarStatus(`⚠️ Arquivo não encontrado para ${turnoLabel} em ${formatarDataParaExibicao(`${mesNum1}/${anoCompleto1}`)}. A comparação será incompleta.`, false);
+                 if (!fileInfo2) mostrarStatus(`⚠️ Arquivo não encontrado para ${turnoLabel} em ${formatarDataParaExibicao(`${mesNum2}/${anoCompleto2}`)}. A comparação será incompleta.`, false);
+
+                 if (fileInfo1) { dadosPeriodo1Raw = await fetch(fileInfo1.nome).then(res => res.json()); infoPeriodo1 = fileInfo1; } else { dadosPeriodo1Raw = null; infoPeriodo1 = { tituloPeriodo: formatarDataParaExibicao(`${mesNum1}/${anoCompleto1}`), turno: turnoLabel, tipo: 'mensal' }; }
+                 if (fileInfo2) { dadosPeriodo2Raw = await fetch(fileInfo2.nome).then(res => res.json()); infoPeriodo2 = fileInfo2; } else { dadosPeriodo2Raw = null; infoPeriodo2 = { tituloPeriodo: formatarDataParaExibicao(`${mesNum2}/${anoCompleto2}`), turno: turnoLabel, tipo: 'mensal' }; }
+
+                 modoTabela = 'comparativo';
+                 tituloPrincipal = `Comparativo Mensal (Mesmo Turno: ${turnoLabel})`;
+                 subtitulo = `${infoPeriodo1.tituloPeriodo} vs ${infoPeriodo2.tituloPeriodo}`;
+
+                 // Add Industrial Yield for month-to-month comparison (same turn)
+                 let yield1 = dadosPeriodo1Raw?.rendimento_industrial !== undefined ? parseFloat(dadosPeriodo1Raw.rendimento_industrial) : null;
+                 let yield2 = dadosPeriodo2Raw?.rendimento_industrial !== undefined ? parseFloat(dadosPeriodo2Raw.rendimento_industrial) : null;
+
+                  if (yield1 !== null) {
+                       yieldDataForComparison.push({ key: 'periodo1', label: infoPeriodo1.tituloPeriodo, yield: yield1 });
+                  }
+                  if (yield2 !== null) {
+                       yieldDataForComparison.push({ key: 'periodo2', label: infoPeriodo2.tituloPeriodo, yield: yield2 });
+                  }
+
+
+            } else if (tipoAnaliseAtual === 'comparar_mes_yoy') {
+                 const mesNum = document.getElementById('selectYoYMes').value;
+                 const anoBaseCompleto = document.getElementById('selectYoYAno').value;
+                 const comparisonType = document.getElementById('selectYoYTurno').value; // total, turno1, turno2
+                 if (!mesNum || !anoBaseCompleto || !comparisonType) throw new Error("Selecione o mês, ano base e o tipo de comparação.");
+
+                 const anosComDadosParaMes = [...new Set(infoArquivos
+                      .filter(info => info.tipo === 'mensal' && info.mes === mesNum.padStart(2,'0') && (comparisonType === 'total' || info.turno.toLowerCase() === comparisonType))
+                      .map(info => info.ano)
+                 )].sort(); // Sort ascending to find relevant years
+
+                 // Filter years relevant to the base year (e.g., base year and previous ones)
+                 const anosParaComparar = anosComDadosParaMes.filter(ano => parseInt(ano) <= parseInt(anoBaseCompleto)).slice(-2); // Get at most the last two years <= base year
+
+                 if (anosParaComparar.length === 0) {
+                      throw new Error(`Nenhum dado mensal encontrado para o mês ${mesNum} nos anos anteriores ou igual a ${anoBaseCompleto} para a comparação "${comparisonType.replace('turno', 'Turno ')}".`);
+                 }
+                 if (anosParaComparar.length === 1 && comparisonType === 'total') {
+                      mostrarStatus(`⚠️ Encontrado dado apenas para o ano ${anosParaComparar[0]} para comparação Total. Não é possível comparar YoY Total com apenas um ano.`, false);
+                 }
+
+
+                 let anoAnterior = anosParaComparar.length === 2 ? anosParaComparar[0] : null;
+                 let anoRecente = anosParaComparar[anosParaComparar.length - 1];
+
+
+                 let dadosAnoAnteriorRaw = null, dadosAnoRecenteRaw = null;
+                 let infoAnoAnterior = null, infoAnoRecente = null;
+
+                 // Load data for the most recent year found <= base year
+                 const baseIdRecente = `mensal.${mesNum.padStart(2,'0')}.${anoRecente.substring(2)}`;
+                 if (comparisonType === 'total') {
+                      const fileInfoRecenteT1 = findFileInfoByIdBaseAndTurn(baseIdRecente, 'turno1', 'mensal');
+                      const fileInfoRecenteT2 = findFileInfoByIdBaseAndTurn(baseIdRecente, 'turno2', 'mensal');
+                       let dadosT1 = fileInfoRecenteT1 ? await fetch(fileInfoRecenteT1.nome).then(res => res.json()).catch(() => null) : null;
+                       let dadosT2 = fileInfoRecenteT2 ? await fetch(fileInfoRecenteT2.nome).then(res => res.json()).catch(() => null) : null;
+                       dadosAnoRecenteRaw = {
+                           dados: agregarDadosTurnos(dadosT1?.dados, dadosT2?.dados),
+                           rendimento_industrial: (dadosT1?.rendimento_industrial !== undefined && dadosT2?.rendimento_industrial !== undefined) ? (parseFloat(dadosT1.rendimento_industrial) + parseFloat(dadosT2.rendimento_industrial)) / 2 : null // Simple average if both exist
+                       };
+                        infoAnoRecente = { tituloPeriodo: formatarDataParaExibicao(`${mesNum}/${anoRecente}`), turno: 'Total (T1+T2)', tipo: 'mensal', ano: anoRecente, mes: mesNum };
+
+                 } else { // Individual turn comparison for YoY
+                      const fileInfoRecente = findFileInfoByIdBaseAndTurn(baseIdRecente, comparisonType, 'mensal');
+                      if (fileInfoRecente) {
+                           dadosAnoRecenteRaw = await fetch(fileInfoRecente.nome).then(res => res.json()).catch(() => null);
+                           infoAnoRecente = fileInfoRecente;
+                      } else {
+                            mostrarStatus(`⚠️ Arquivo não encontrado para ${comparisonType.replace('turno', 'Turno ')} em ${formatarDataParaExibicao(`${mesNum}/${anoRecente}`)}.`, false);
+                           dadosAnoRecenteRaw = null;
+                           infoAnoRecente = { tituloPeriodo: formatarDataParaExibicao(`${mesNum}/${anoRecente}`), turno: comparisonType.replace('turno','Turno '), tipo: 'mensal', ano: anoRecente, mes: mesNum };
+                      }
+                 }
+                 dadosVisaoAtual.periodo2 = dadosAnoRecenteRaw?.dados || []; // Most recent is Period 2 for table/chart
+
+
+                 // Load data for the previous year if available
+                 if (anoAnterior) {
+                      const baseIdAnterior = `mensal.${mesNum.padStart(2,'0')}.${anoAnterior.substring(2)}`;
+                     if (comparisonType === 'total') {
+                           const fileInfoAnteriorT1 = findFileInfoByIdBaseAndTurn(baseIdAnterior, 'turno1', 'mensal');
+                           const fileInfoAnteriorT2 = findFileInfoByIdBaseAndTurn(baseIdAnterior, 'turno2', 'mensal');
+                           let dadosT1 = fileInfoAnteriorT1 ? await fetch(fileInfoAnteriorT1.nome).then(res => res.json()).catch(() => null) : null;
+                           let dadosT2 = fileInfoAnteriorT2 ? await fetch(fileInfoAnteriorT2.nome).then(res => res.json()).catch(() => null) : null;
+                           dadosAnoAnteriorRaw = {
+                               dados: agregarDadosTurnos(dadosT1?.dados, dadosT2?.dados),
+                               rendimento_industrial: (dadosT1?.rendimento_industrial !== undefined && dadosT2?.rendimento_industrial !== undefined) ? (parseFloat(dadosT1.rendimento_industrial) + parseFloat(dadosT2.rendimento_industrial)) / 2 : null // Simple average if both exist
+                           };
+                            infoAnoAnterior = { tituloPeriodo: formatarDataParaExibicao(`${mesNum}/${anoAnterior}`), turno: 'Total (T1+T2)', tipo: 'mensal', ano: anoAnterior, mes: mesNum };
+
+                      } else { // Individual turn comparison for YoY
+                           const fileInfoAnterior = findFileInfoByIdBaseAndTurn(baseIdAnterior, comparisonType, 'mensal');
+                           if (fileInfoAnterior) {
+                               dadosAnoAnteriorRaw = await fetch(fileInfoAnterior.nome).then(res => res.json()).catch(() => null);
+                               infoAnoAnterior = fileInfoAnterior;
+                           } else {
+                                mostrarStatus(`⚠️ Arquivo não encontrado para ${comparisonType.replace('turno', 'Turno ')} em ${formatarDataParaExibicao(`${mesNum}/${anoAnterior}`)}.`, false);
+                               dadosAnoAnteriorRaw = null;
+                               infoAnoAnterior = { tituloPeriodo: formatarDataParaExibicao(`${mesNum}/${anoAnterior}`), turno: comparisonType.replace('turno','Turno '), tipo: 'mensal', ano: anoAnterior, mes: mesNum };
+                           }
+                      }
+                     dadosVisaoAtual.periodo1 = dadosAnoAnteriorRaw?.dados || []; // Previous year is Period 1 for table/chart
+
+                 } else {
+                     // Only data for the base year exists, cannot compare YoY
+                      dadosVisaoAtual.periodo1 = []; // Empty data for Period 1
+                      infoAnoAnterior = { tituloPeriodo: 'Ano Anterior (N/D)', turno: comparisonType.replace('turno','Turno '), tipo: 'mensal', ano: null, mes: null };
+                 }
+
+                 // Add Industrial Yield for YoY comparison
+                 if (dadosAnoAnteriorRaw?.rendimento_industrial !== undefined && dadosAnoAnteriorRaw.rendimento_industrial !== null) {
+                     yieldDataForComparison.push({ key: 'yoyYear1', label: infoAnoAnterior.tituloPeriodo, yield: parseFloat(dadosAnoAnteriorRaw.rendimento_industrial) });
+                 }
+                  if (dadosAnoRecenteRaw?.rendimento_industrial !== undefined && dadosAnoRecenteRaw.rendimento_industrial !== null) {
+                      yieldDataForComparison.push({ key: 'yoyYear2', label: infoAnoRecente.tituloPeriodo, yield: parseFloat(dadosAnoRecenteRaw.rendimento_industrial) });
+                  }
+
+
+                 modoTabela = 'comparativo';
+                 tituloPrincipal = `Comparativo Mês YoY (${formatarDataParaExibicao(mesNum + '/' + anoBaseCompleto)})`;
+                 subtitulo = `${comparisonType.replace('turno','Turno ').replace('total','Total (T1+T2)')}: ${infoAnoAnterior.tituloPeriodo} vs ${infoAnoRecente.tituloPeriodo}`;
+
+            } else {
+                throw new Error("Tipo de análise selecionado inválido.");
+            }
+
+
+             // --- 2. Render results ---
+
+            // Extract product data arrays from raw data (handles individual monthly JSON structure)
+             const finalDadosPeriodo1 = (tipoAnaliseAtual.startsWith('mensal') && !tipoAnaliseAtual.includes('_t1t2') && dadosPeriodo1Raw)
+                                         ? (dadosPeriodo1Raw.dados || [])
+                                         : (dadosPeriodo1Raw || []); // Use raw data if not individual monthly
+             const finalDadosPeriodo2 = dadosPeriodo2Raw?.dados || (dadosPeriodo2Raw || []); // Use raw data or its 'dados' property
+
+             // Handle case where comparison data was aggregated (YoY Total)
+             if (tipoAnaliseAtual === 'comparar_mes_yoy' && comparisonType === 'total') {
+                  // Use the aggregated data directly which is already in dadosVisaoAtual
+                  // The variables finalDadosPeriodo1/2 should be updated to point there
+                  finalDadosPeriodo1 = dadosVisaoAtual.periodo1;
+                  finalDadosPeriodo2 = dadosVisaoAtual.periodo2;
+             }
+             // Handle other dual period comparisons (two days, two months)
+             else if (tipoAnaliseAtual === 'comparar_dois_dias_turno' || tipoAnaliseAtual === 'comparar_dois_meses_turno') {
+                  // Data is in dadosVisaoAtual.periodo1/periodo2 already from fetch
+                  finalDadosPeriodo1 = dadosVisaoAtual.periodo1;
+                  finalDadosPeriodo2 = dadosVisaoAtual.periodo2;
+             } else if (tipoAnaliseAtual.includes('_t1t2')) {
+                  // Data is in dadosVisaoAtual.periodo1/periodo2 already from fetch
+                  finalDadosPeriodo1 = dadosVisaoAtual.periodo1;
+                  finalDadosPeriodo2 = dadosVisaoAtual.periodo2;
+             }
+
+
+            if (yieldDataForComparison.length > 1) { // More than just the meta
+                 mostrarRendimentoIndustrial(yieldDataForComparison);
+            } else {
+                 document.getElementById("industrialYieldAnalysis").style.display = 'none';
+            }
+
+
+             if (modoTabela === 'individual') {
+                 if (!Array.isArray(finalDadosPeriodo1) || finalDadosPeriodo1.length === 0) {
+                       throw new Error(`Nenhum dado de produto encontrado para ${infoPeriodo1.tituloPeriodo} (${infoPeriodo1.turno}).`);
+                 }
+                 mostrarCabecalho(tituloPrincipal, subtitulo);
+                 mostrarTabela(finalDadosPeriodo1, infoPeriodo1, modoTabela);
+             } else if (modoTabela === 'comparativo') {
+                 if ((!Array.isArray(finalDadosPeriodo1) || finalDadosPeriodo1.length === 0) && (!Array.isArray(finalDadosPeriodo2) || finalDadosPeriodo2.length === 0)) {
+                      throw new Error(`Nenhum dado de produto encontrado para comparar os períodos/turnos selecionados.`);
+                 }
+                 mostrarCabecalho(tituloPrincipal, subtitulo);
+                 mostrarTabela(finalDadosPeriodo1, infoPeriodo1, modoTabela, finalDadosPeriodo2, infoPeriodo2);
+             } else {
+                 throw new Error("Modo de tabela não definido ou inválido.");
+             }
+
+
+        } catch (error) {
+            console.error("Erro ao carregar/processar dados selecionados:", error);
+            destruirGraficos();
+             document.getElementById("industrialYieldAnalysis").style.display = 'none';
+            document.getElementById("info").innerHTML = `❌ Erro: ${error.message}`;
+            document.getElementById("info").style.display = 'block';
+            document.getElementById("contentArea").style.display = 'none'; // Hide content on error
+            document.querySelector('.btn-pdf-visao').style.display = 'none';
+            mostrarStatus(`❌ Erro ao carregar: ${error.message}`, true);
+        }
+    }
+
+     // --- Helper functions to find files based on criteria ---
+
+     // Find file info by date (YYYY-MM-DD string) and turn ('turno1', 'turno2')
+     function findFileInfoByDateAndTurn(dateStringYYYYMMDD, turn) {
+          if (!dateStringYYYYMMDD || !turn || !infoArquivos || infoArquivos.length === 0) return null;
+          // Convert YYYY-MM-DD to DD/MM/YYYY format used in infoArquivos.data
+          try {
+               const dateParts = dateStringYYYYMMDD.split('-'); // ["YYYY", "MM", "DD"]
+               if (dateParts.length !== 3) throw new Error("Invalid date format");
+               const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`; // DD/MM/YYYY
+
+               // Search infoArquivos for type 'diario', matching formatted date and turn (case-insensitive turn)
+               return infoArquivos.find(info =>
+                   info.tipo === 'diario' &&
+                   info.data === formattedDate &&
+                   info.turno.toLowerCase() === turn.toLowerCase()
+               );
+          } catch (e) {
+               console.error("Erro formatando data para busca:", dateStringYYYYMMDD, e);
+               return null;
+          }
+     }
+
+     // Find file info by base ID (e.g., 'semana.08a12.04.25', 'mensal.04.25'), turn, and type ('semanal', 'mensal')
+     function findFileInfoByIdBaseAndTurn(idBase, turn, type) {
+          if (!idBase || !turn || !type || !infoArquivos || infoArquivos.length === 0) return null;
+
+          // Search infoArquivos for matching type, idBase, and turn (case-insensitive turn)
+          return infoArquivos.find(info =>
+              info.tipo === type &&
+              info.idBase === idBase &&
+              info.turno.toLowerCase() === turn.toLowerCase()
+          );
+     }
+
+
+     function getUniqueYearsAndMonths(fileInfos) {
+          const years = new Set();
+          const monthsByYear = new Map(); // Map: Year (YYYY) -> Set of Months (MM)
+
+          fileInfos.forEach(info => {
+               if (info.ano && info.ano !== 'N/A' && info.mes && info.mes !== 'N/A') {
+                    years.add(info.ano);
+                    if (!monthsByYear.has(info.ano)) {
+                         monthsByYear.set(info.ano, new Set());
+                    }
+                    monthsByYear.get(info.ano).add(info.mes);
+               }
+          });
+
+          const sortedYears = [...years].sort().reverse(); // Most recent first
+          const sortedMonthsByYear = new Map();
+          monthsByYear.forEach((months, year) => {
+              sortedMonthsByYear.set(year, [...months].sort()); // Sort months numerically (as strings "01", "02"...)
+          });
+
+          return { years: sortedYears, monthsByYear: sortedMonthsByYear };
+     }
+
+    // Helper function to populate a year select element
+     function populateYearSelect(selectElement, yearsList) {
+         selectElement.innerHTML = '<option value="">Selecione...</option>';
+         yearsList.forEach(year => {
+             const option = document.createElement('option');
+             option.value = year; // YYYY
+             option.textContent = year; // YYYY
+             selectElement.appendChild(option);
+         });
+     }
+
+     // Helper function to populate a month select element based on selected year
+     function populateMonthSelect(selectElement, selectedYear, monthsByYearMap) {
+          selectElement.innerHTML = '<option value="">Selecione...</option>'; // Reset months
+          if (selectedYear && monthsByYearMap.has(selectedYear)) {
+               const months = monthsByYearMap.get(selectedYear); // Set of MM strings
+               months.forEach(monthNum => { // monthNum is "MM" string
+                   try {
+                       // Use full year and 0-indexed month for Date object
+                       const monthName = new Date(parseInt(selectedYear), parseInt(monthNum) - 1, 1).toLocaleString('pt-BR', { month: 'long' });
+                        const option = document.createElement('option');
+                        option.value = monthNum; // Value is "MM"
+                        option.textContent = monthName.charAt(0).toUpperCase() + monthName.slice(1); // Text is Month Name
+                        selectElement.appendChild(option);
+                   } catch(e) {
+                        // Fallback if date parsing fails
+                       const option = document.createElement('option');
+                       option.value = monthNum;
+                       option.textContent = `Mês ${monthNum}`;
+                       selectElement.appendChild(option);
+                   }
+               });
+          } else if (selectedYear) {
+               selectElement.innerHTML = '<option value="">Nenhum mês encontrado</option>';
+          } else {
+               selectElement.innerHTML = '<option value="">Selecione o Ano</option>';
+          }
+     }
+
+
+    // Setup change listener for month/year selectors (used by multiple selector groups)
+     function setupMonthYearSelectors(yearSelectElement, monthSelectElement) {
+         yearSelectElement.addEventListener('change', function() {
+              const { years, monthsByYear } = getUniqueYearsAndMonths(infoArquivos); // Re-calculate or use cached? Cache is better.
+              populateMonthSelect(monthSelectElement, this.value, monthsByYear);
+         });
+     }
+
+
+    async function iniciar() {
+        mostrarStatus("⏳ Carregando manifesto de arquivos...");
+        try {
+            const response = await fetch("index.json"); // Assume index.json is at the root
+            if (!response.ok) throw new Error(`Erro ao carregar index.json: ${response.status} ${response.statusText}`);
+            const listaManifesto = await response.json();
+
+            if (!listaManifesto || !Array.isArray(listaManifesto.arquivos) || listaManifesto.arquivos.length === 0) {
+                 throw new Error("Nenhum arquivo encontrado ou formato inválido no manifesto index.json.");
+            }
+            arquivosDisponiveis = listaManifesto.arquivos;
+
+
+             // Parse info for all available files once
+            infoArquivos = arquivosDisponiveis.map(nome => extrairInfo(nome)).filter(info => info.tipo !== 'N/A' && info.turno !== 'N/A'); // Filter out invalid entries
+             console.log("Arquivos encontrados e info extraída:", infoArquivos);
+             if (infoArquivos.length === 0) {
+                  throw new Error("Nenhum arquivo válido de dados encontrado após analisar o manifesto.");
+             }
+
+
+            const { years, monthsByYear } = getUniqueYearsAndMonths(infoArquivos);
+
+            // Populate ALL relevant selectors initially
+            populateYearSelect(document.getElementById('selectAno'), years);
+            populateYearSelect(document.getElementById('selectAno1'), years);
+            populateYearSelect(document.getElementById('selectAno2'), years);
+            populateYearSelect(document.getElementById('selectYoYAno'), years);
+
+            // Set up listeners for Month selectors (called once during init)
+            setupMonthYearSelectors(document.getElementById('selectAno'), document.getElementById('selectMes'));
+            setupMonthYearSelectors(document.getElementById('selectAno1'), document.getElementById('selectMes1'));
+            setupMonthYearSelectors(document.getElementById('selectAno2'), document.getElementById('selectMes2'));
+            setupMonthYearSelectors(document.getElementById('selectYoYAno'), document.getElementById('selectYoYMes'));
+
+
+            // Populate Semana Selector
+            const selectSemana = document.getElementById('selectSemana');
+            selectSemana.innerHTML = '<option value="">Selecione...</option>';
+            // Filter unique weekly files and sort by date
+             const uniqueSemanas = infoArquivos
+                  .filter(info => info.tipo === 'semanal' && info.idBase !== 'N/A' && info.periodoSemana !== 'N/A') // Filter valid weekly entries
+                  .reduce((map, info) => {
+                       if (!map.has(info.idBase)) {
+                            // Try to create a sortable date from the first day of the week period (DD.MM.YY)
+                            try {
+                                 const parts = info.idBase.split('.'); // semana.DDaDD.MM.YY
+                                 const dayPart = parts[1].split('a')[0]; // DD
+                                 const monthPart = parts[2]; // MM
+                                 const yearPart = parts[3]; // YY
+                                 // Need to parse this into a Date object correctly (handle potential Y2K if needed, assume 20YY for now)
+                                 const sortDate = new Date(parseInt("20" + yearPart), parseInt(monthPart) - 1, parseInt(dayPart));
+                                  map.set(info.idBase, { info: info, sortDate: sortDate });
+                            } catch(e) {
+                                 console.warn("Could not parse date for weekly sort:", info.idBase, e);
+                                 map.set(info.idBase, { info: info, sortDate: new Date(info.ano, info.mes -1, 1) }); // Fallback to month start
+                            }
+
+                       }
+                       return map;
+                  }, new Map());
+
+             [...uniqueSemanas.values()]
+                 .sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime()) // Sort newest first by timestamp
+                  .forEach(item => {
+                      const option = document.createElement('option');
+                      option.value = item.info.idBase;
+                      option.textContent = item.info.tituloPeriodo;
+                      selectSemana.appendChild(option);
+                 });
+
+
+            esconderStatus(); // Hide status after success
+            console.log("Manifesto de arquivos carregado e seletores populados. Pronto para seleção.");
+
+        } catch (error) {
+            console.error("Erro crítico ao iniciar:", error);
+            mostrarStatus(`❌ Erro crítico ao iniciar: ${error.message}. Verifique o console e o arquivo index.json.`, true);
+             document.querySelector(".menu").style.display = 'none'; // Hide menu if cannot load files
+             document.querySelector(".voltar").style.display = 'none'; // Hide voltar button
+        }
+    }
+
+    // --- Função de Exportação PDF ---
+    async function exportarPDF_VisaoAtual() {
+        mostrarStatus("⏳ Gerando PDF...");
+        const elementToCapture = document.getElementById('contentArea');
+        const infoDiv = document.getElementById('info');
+        const pdfButton = document.querySelector('.btn-pdf-visao');
+        const originalPdfButtonDisplay = pdfButton.style.display;
+
+        // --- Prepare for Capture ---
+        pdfButton.style.display = 'none'; // Hide the export button
+         // Disable chart animations for render (Chart.js v3+)
+        if(Chart.defaults.animation) Chart.defaults.animation.duration = 0;
+
+        // Add title to the capture area (clone to avoid modifying original info div)
+        const titleElement = infoDiv.cloneNode(true);
+        // Ensure it's styled correctly for print context if needed
+        titleElement.style.display = 'block'; // Make sure clone is visible
+
+        // Find a good place to insert the title - before the first child that is not the yield section (if yield exists)
+        let insertBeforeElement = elementToCapture.firstChild;
+        const yieldSection = document.getElementById('industrialYieldAnalysis');
+
+        if (yieldSection && elementToCapture.contains(yieldSection)) {
+             // Find the correct insertion point among direct children
+             let firstRelevantChild = elementToCapture.firstElementChild;
+             while(firstRelevantChild && (firstRelevantChild.id === 'industrialYieldAnalysis' || firstRelevantChild.style.display === 'none')) {
+                 firstRelevantChild = firstRelevantChild.nextElementSibling;
+             }
+             if (firstRelevantChild) {
+                  elementToCapture.insertBefore(titleElement, firstRelevantChild);
+             } else {
+                  // If only yield section is visible, append after it
+                 elementToCapture.appendChild(titleElement);
+             }
+
+        } else {
+             // If yield section doesn't exist or isn't a direct child, insert at the top
+            elementToCapture.insertBefore(titleElement, elementToCapture.firstChild);
+        }
+
+
+        // Force Chart.js to render immediately with animations off
+        if (graficoIndividualInstancia) { graficoIndividualInstancia.update('none'); }
+        if (graficoComparativoInstancia) { graficoComparativoInstancia.update('none'); }
+        if (graficoRendimentoIndustrialInstancia) { graficoRendimentoIndustrialInstancia.update('none'); }
+
+
+        // --- Configure PDF Options ---
+        const infoText = infoDiv.innerText.split('\n')[0] || 'Relatorio'; // Get first line of title
+        const filename = `relatorio_${infoText.substring(0, 50).replace(/[^a-z0-9_]/gi, '_').toLowerCase()}_${new Date().toISOString().split('T')[0]}.pdf`;
+
+        const opt = {
+          margin:       [10, 10, 10, 10], // Margins T, L, B, R in mm
+          filename:     filename,
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  {
+              scale: 2, // Increase scale for better resolution
+              useCORS: true,
+              logging: false,
+              dpi: 192, // Higher DPI
+               letterRendering: true, // Improve text rendering
+               allowTaint: true, // Needed if using external images/canvases
+               scrollY: -window.scrollY, // Attempt to capture from the top if scrolled
+               windowWidth: document.documentElement.offsetWidth, // Capture full width
+               windowHeight: document.documentElement.offsetHeight // Capture full height
+          },
+          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' },
+          pagebreak:    {
+               mode: ['css', 'avoid-all'], // Use CSS rules and try to avoid breaks
+               avoid: ['.chart-container', '.summary', 'tr', '.info', '.industrial-yield-section'], // Elements to keep intact
+               //before: ['h4'] // Optionally break before h4 sections within content area
+           }
+        };
+
+        // Delay slightly to ensure charts are rendered after animation disable/update
+        await new Promise(resolve => setTimeout(resolve, 500)); // Increased delay for complex renders
+
+
+        try {
+            console.log(`Gerando PDF: ${filename}`);
+            await html2pdf().from(elementToCapture).set(opt).save();
+            console.log("PDF gerado com sucesso.");
+             mostrarStatus(`📄 PDF gerado com sucesso!`, false);
+        } catch (error) {
+            console.error("Erro ao gerar PDF:", error);
+            alert("Ocorreu um erro ao gerar o PDF. Verifique o console.");
+             mostrarStatus(`❌ Erro ao gerar PDF: ${error.message}`, true);
+        } finally {
+            // --- Cleanup After Capture ---
+            elementToCapture.removeChild(titleElement); // Remove the cloned title
+            pdfButton.style.display = originalPdfButtonDisplay; // Restore button
+             // Restore chart animations
+            if(Chart.defaults.animation) Chart.defaults.animation.duration = 500;
+             // Re-enable dynamic updates if needed
+             if (graficoIndividualInstancia) { graficoIndividualInstancia.update(); }
+             if (graficoComparativoInstancia) { graficoComparativoInstancia.update(); }
+             if (graficoRendimentoIndustrialInstancia) { graficoRendimentoIndustrialInstancia.update(); }
+
+            console.log("Limpeza pós-PDF concluída.");
+        }
+    }
+
+
+    // --- Inicia a aplicação quando a janela carregar ---
+    window.onload = iniciar;
+
+</script>
+</body>
+</html>
