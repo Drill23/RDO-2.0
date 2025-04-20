@@ -1,0 +1,30 @@
+{
+  "metaIndustrial": 81.600, // Meta fixa (pode editar aqui se mudar)
+  "realizadoIndustrial": {
+    "2025-04-11": {
+       "Turno 1": 80.500,
+       "Turno 2": 82.100
+    },
+    "2025-04-14": {
+       "Turno 1": 80.000,
+       "Turno 2": 81.500
+    },
+    "2025-04-semana.14a17": {
+       "Turno 1": 81.200,
+       "Turno 2": 83.000
+    },
+    "2025-01": {
+       "Turno 1": 80.800,
+       "Turno 2": 82.500
+    },
+     "2024-01": {
+        "Turno 1": 78.000,
+        "Turno 2": 79.500
+     },
+     "2024-02": {
+        "Turno 1": 79.000,
+        "Turno 2": 80.000
+     }
+     // ... adicione mais entradas para os períodos que você tiver dados de RI
+  }
+}
